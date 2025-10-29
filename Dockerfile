@@ -11,7 +11,6 @@ COPY . .
 RUN pip install --no-cache-dir -r server-python/requirements.txt
 
 # Expose port Railway (otomatis diisi oleh env $PORT)
-EXPOSE 5000
 
 # Jalankan server Python
-CMD ["python", "server-python/run.py", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["python", "server-python/run.py", "--dev", "--with-frontend"]
