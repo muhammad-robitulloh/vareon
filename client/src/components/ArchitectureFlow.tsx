@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 
 export default function ArchitectureFlow() {
   const nodes = [
-    { id: "neuronet", label: "NeuroNet AI", subtitle: "Intelligence Core" },
+    { id: "arcana", label: "Arcana AI", subtitle: "Intelligence Core" },
     { id: "neosyntis", label: "NEOSYNTIS", subtitle: "Development Lab" },
     { id: "myntrix", label: "MYNTRIX", subtitle: "Execution Core" },
     { id: "edge", label: "Edge Devices", subtitle: "Production" },
@@ -23,7 +23,7 @@ export default function ArchitectureFlow() {
         <div className="flex flex-col items-center space-y-8 md:flex-row md:space-x-4 md:space-y-0">
           {nodes.map((node, index) => (
             <div key={node.id} className="flex items-center">
-              <div className="group relative">
+              <div className="group relative transition-all duration-300 hover:scale-105 hover:shadow-xl">
                 <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-primary to-chart-2 opacity-25 blur transition group-hover:opacity-50" />
                 <div className="relative flex h-32 w-40 flex-col items-center justify-center rounded-xl border border-border bg-background p-4">
                   <div className="mb-2 text-lg font-bold text-foreground">
@@ -36,7 +36,7 @@ export default function ArchitectureFlow() {
               </div>
               
               {index < nodes.length - 1 && (
-                <ArrowRight className="mx-4 hidden h-8 w-8 text-primary md:block" />
+                <ArrowRight className="mx-4 hidden h-8 w-8 text-primary md:block animate-pulse-horizontal" />
               )}
             </div>
           ))}
@@ -46,7 +46,7 @@ export default function ArchitectureFlow() {
           <div className="rounded-xl border border-border bg-background p-6">
             <div className="mb-3 text-lg font-semibold text-foreground">1. AI Processing</div>
             <p className="text-sm text-muted-foreground">
-              NeuroNet AI analyzes tasks using multi-model orchestration, intent detection, and reasoning capabilities
+              Arcana AI analyzes tasks using multi-model orchestration, intent detection, and reasoning capabilities
             </p>
           </div>
           <div className="rounded-xl border border-border bg-background p-6">

@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+gunicorn
+python-jose[cryptography]
+python-multipart
+SQLAlchemy
+python-dotenv
+Flask
+httpx
+email-validator

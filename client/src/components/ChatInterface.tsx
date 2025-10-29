@@ -12,39 +12,53 @@ interface Message {
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hello! I'm NeuroNet AI. I can help you with code generation, shell commands, or general conversation. What would you like to work on?", type: "text" }
+    { role: "assistant", content: "Hello! I'm Arcana AI. I can help you with code generation, shell commands, or general conversation. What would you like to work on?", type: "text" }
   ]);
   const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false); // New state for typing indicator
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage: Message = { role: "user", content: input, type: "text" };
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
+    setInput("");
+    setIsTyping(true);
 
-    // Mock AI response
-    setTimeout(() => {
-      const responses = [
-        { content: "I can help you with that. Here's a Python example:", type: "code" as const, language: "python" },
-        { content: "Let me execute that command for you...", type: "command" as const },
-        { content: "Based on my analysis, I recommend...", type: "text" as const }
-      ];
-      const response = responses[Math.floor(Math.random() * responses.length)];
+    try {
+      const response = await fetch("http://localhost:8001/api/chat/demo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: currentInput }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
       
       const aiMessage: Message = { 
         role: "assistant", 
-        content: response.type === "code" 
-          ? "def hello_world():\n    print('Hello from NeuroNet!')\n    return True" 
-          : response.type === "command"
-          ? "ls -la | grep .py"
-          : "I've processed your request. The intent has been detected and I'm ready to proceed with the appropriate action.",
-        type: response.type,
-        language: response.language
+        content: data.response || "Sorry, I couldn't get a response.",
+        type: "text" // Assuming the response is always text for now
       };
       setMessages(prev => [...prev, aiMessage]);
-    }, 800);
 
-    setInput("");
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      const errorMessage: Message = { 
+        role: "assistant", 
+        content: "Sorry, something went wrong. Please try again later.",
+        type: "text"
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   return (
@@ -52,7 +66,7 @@ export default function ChatInterface() {
       <div className="flex items-center justify-between border-b border-border p-4">
         <div className="flex items-center space-x-2">
           <Bot className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-foreground">NeuroNet AI</span>
+          <span className="font-semibold text-foreground">Arcana AI</span>
         </div>
         <div className="flex items-center space-x-2">
           <div className="h-2 w-2 rounded-full bg-chart-3" />
@@ -64,7 +78,7 @@ export default function ChatInterface() {
         {messages.map((msg, idx) => (
           <div
             key={idx}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            className={`flex animate-fade-in-up ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div className={`flex max-w-[80%] space-x-2 ${msg.role === "user" ? "flex-row-reverse space-x-reverse" : ""}`}>
               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -81,9 +95,9 @@ export default function ChatInterface() {
                   msg.role === "user"
                     ? "bg-primary/20 text-foreground"
                     : msg.type === "code"
-                    ? "bg-muted font-mono text-sm"
+                    ? "bg-muted font-mono text-sm border border-border"
                     : msg.type === "command"
-                    ? "bg-muted font-mono text-sm"
+                    ? "bg-muted font-mono text-sm border border-border"
                     : "bg-muted text-foreground"
                 }`}
               >
@@ -104,6 +118,23 @@ export default function ChatInterface() {
             </div>
           </div>
         ))}
+
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="flex max-w-[80%] space-x-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                <Bot className="h-4 w-4 text-foreground" />
+              </div>
+              <div className="rounded-xl p-3 bg-muted text-foreground">
+                <div className="flex items-center space-x-1">
+                  <span className="animate-pulse-dot">.</span>
+                  <span className="animate-pulse-dot animation-delay-100">.</span>
+                  <span className="animate-pulse-dot animation-delay-200">.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-border p-4">
@@ -111,7 +142,7 @@ export default function ChatInterface() {
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask NeuroNet AI anything..."
+            placeholder="Ask Arcana AI anything..."
             className="min-h-[60px] resize-none"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {

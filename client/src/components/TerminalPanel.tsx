@@ -10,27 +10,59 @@ export default function TerminalPanel() {
     ""
   ]);
   const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
 
   const handleCommand = (cmd: string) => {
-    const newOutput = [...output, `$ ${cmd}`];
-    
-    // Mock command responses
-    if (cmd === "help") {
-      newOutput.push("Available commands:", "  ls     - List files", "  pwd    - Print working directory", "  clear  - Clear terminal", "");
-    } else if (cmd === "ls") {
-      newOutput.push("ai_core.py  ai_services.py  config.py  main.py", "");
-    } else if (cmd === "pwd") {
-      newOutput.push("/workspace/neuronet", "");
-    } else if (cmd === "clear") {
-      setOutput(["$ NeuroNet Shell v2.0", ""]);
-      setInput("");
-      return;
-    } else if (cmd) {
-      newOutput.push(`Command '${cmd}' not found. Type 'help' for available commands.`, "");
-    }
-    
-    setOutput(newOutput);
+    const userCommand = `$ ${cmd}`;
+    setOutput((prev) => [...prev, userCommand]);
     setInput("");
+    setIsTyping(true);
+
+    setTimeout(() => {
+      let responseLines: string[] = [];
+      if (cmd === "help") {
+        responseLines = ["Available commands:", "  ls     - List files", "  pwd    - Print working directory", "  clear  - Clear terminal", ""];
+      } else if (cmd === "ls") {
+        responseLines = ["ai_core.py  ai_services.py  config.py  main.py", ""];
+      } else if (cmd === "pwd") {
+        responseLines = ["/workspace/neuronet", ""];
+      } else if (cmd === "clear") {
+        setOutput(["$ NeuroNet Shell v2.0", ""]);
+        setInput("");
+        setIsTyping(false);
+        return;
+      } else if (cmd) {
+        responseLines = [`Command '${cmd}' not found. Type 'help' for available commands.`, ""];
+      }
+
+      let currentLineIndex = 0;
+      let charIndex = 0;
+      const typingInterval = setInterval(() => {
+        if (currentLineIndex < responseLines.length) {
+          const currentLine = responseLines[currentLineIndex];
+          if (charIndex <= currentLine.length) {
+            setOutput((prev) => {
+              const lastLine = prev[prev.length - 1];
+              if (lastLine === userCommand || lastLine === "") { // If last line was user command or empty, add new line
+                return [...prev, currentLine.substring(0, charIndex)];
+              } else { // Otherwise, update the last line
+                const updatedPrev = [...prev];
+                updatedPrev[prev.length - 1] = currentLine.substring(0, charIndex);
+                return updatedPrev;
+              }
+            });
+            charIndex++;
+          } else {
+            currentLineIndex++;
+            charIndex = 0;
+            if (currentLineIndex === responseLines.length) {
+              clearInterval(typingInterval);
+              setIsTyping(false);
+            }
+          }
+        }
+      }, 20); // Typing speed
+    }, 500); // Delay before AI starts typing
   };
 
   return (
@@ -40,7 +72,7 @@ export default function TerminalPanel() {
           <TerminalIcon className="h-4 w-4 text-chart-3" />
           <span className="text-xs font-semibold text-foreground">WebSocket Shell</span>
         </div>
-        <div className="flex space-x-1">
+        <div className="flex items-center space-x-1">
           <div className="h-3 w-3 rounded-full bg-chart-5" />
           <div className="h-3 w-3 rounded-full bg-chart-2" />
           <div className="h-3 w-3 rounded-full bg-chart-3" />
@@ -54,6 +86,13 @@ export default function TerminalPanel() {
               {line}
             </div>
           ))}
+          {isTyping && (
+            <div className="text-foreground/80">
+              <span className="animate-pulse-dot">.</span>
+              <span className="animate-pulse-dot animation-delay-100">.</span>
+              <span className="animate-pulse-dot animation-delay-200">.</span>
+            </div>
+          )}
           <div className="flex items-center space-x-2">
             <span className="text-chart-3">$</span>
             <input
