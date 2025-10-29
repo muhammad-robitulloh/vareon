@@ -50,5 +50,8 @@ RUN pip install --no-cache-dir -r server-python/requirements.txt
 # Expose port (Railway otomatis isi $PORT)
 EXPOSE 5000
 
-# Command default untuk menjalankan Uvicorn backend
-CMD ["uvicorn", "server-python.main:app", "--host", "0.0.0.0", "--port", "5000"]
+# Set working directory ke backend
+WORKDIR /app/server-python
+
+# Jalankan server FastAPI via Uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
