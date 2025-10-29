@@ -1,14 +1,17 @@
-modules = ["nodejs-20", "web", "postgresql-16"]
-run = "npm run dev"
+modules = ["nodejs-20", "web", "postgresql-16", "python-3.10"]
+run = "python server-python/run.py --dev --with-frontend"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
 
+[languages.python]
+build = "pip install -r server-python/requirements.txt"
+
 [deployment]
 deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+build = "python run.py --with-frontend"
+run = "python run.py"
 
 [[ports]]
 localPort = 5000
@@ -22,21 +25,21 @@ runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
-mode = "parallel"
 author = "agent"
+mode = "parallel"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "python run.py --dev --with-frontend"
 
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "npm run dev"
+  waitForPort = 5000
 
 [agent]
 integrations = ["javascript_websocket:1.0.0"]
