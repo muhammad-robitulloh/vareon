@@ -1,0 +1,11 @@
+fastapi==0.95.2
+pydantic==1.10.15
+uvicorn
+gunicorn
+python-jose[cryptography]
+python-multipart
+SQLAlchemy
+python-dotenv
+Flask
+httpx
+email-validator

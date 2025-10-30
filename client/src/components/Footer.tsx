@@ -6,7 +6,7 @@ export default function Footer() {
     {
       title: "Product",
       links: [
-        { label: "NeuroNet AI", href: "/neuronet" },
+        { label: "Arcana AI", href: "/arcana" },
         { label: "NEOSYNTIS", href: "/neosyntis" },
         { label: "MYNTRIX", href: "/myntrix" },
       ],

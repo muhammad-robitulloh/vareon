@@ -1,15 +1,35 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Activity } from "lucide-react";
 
 export default function TelemetryChart() {
-  // Mock telemetry data
-  const dataPoints = Array.from({ length: 20 }, (_, i) => ({
-    x: i,
-    y: 30 + Math.random() * 40,
-  }));
+  const [dataPoints, setDataPoints] = useState(
+    Array.from({ length: 20 }, (_, i) => ({
+      x: i,
+      y: 30 + Math.random() * 40,
+    }))
+  );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDataPoints((prevDataPoints) => {
+        const newDataPoints = [...prevDataPoints.slice(1), { // Shift data points to the left
+          x: prevDataPoints[prevDataPoints.length - 1].x + 1,
+          y: 30 + Math.random() * 40, // Generate new random data point
+        }];
+        return newDataPoints;
+      });
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, []);
 
   const maxY = 100;
   const height = 200;
+
+  const latestY = dataPoints[dataPoints.length - 1].y;
+  const averageY = dataPoints.reduce((a, b) => a + b.y, 0) / dataPoints.length;
+  const peakY = Math.max(...dataPoints.map(d => d.y));
 
   return (
     <Card className="border border-card-border p-6">
@@ -61,6 +81,7 @@ export default function TelemetryChart() {
             fill="none"
             stroke="hsl(var(--chart-1))"
             strokeWidth="2"
+            className="transition-all duration-500 ease-linear" // Added for smooth transitions
           />
         </svg>
 
@@ -73,18 +94,18 @@ export default function TelemetryChart() {
 
       <div className="mt-4 grid grid-cols-3 gap-4">
         <div className="rounded-lg bg-muted/50 p-3">
-          <div className="text-2xl font-bold text-foreground">{dataPoints[dataPoints.length - 1].y.toFixed(1)}%</div>
+          <div className="text-2xl font-bold text-foreground">{latestY.toFixed(1)}%</div>
           <div className="text-xs text-muted-foreground">Current Load</div>
         </div>
         <div className="rounded-lg bg-muted/50 p-3">
           <div className="text-2xl font-bold text-foreground">
-            {(dataPoints.reduce((a, b) => a + b.y, 0) / dataPoints.length).toFixed(1)}%
+            {averageY.toFixed(1)}%
           </div>
           <div className="text-xs text-muted-foreground">Average</div>
         </div>
         <div className="rounded-lg bg-muted/50 p-3">
           <div className="text-2xl font-bold text-foreground">
-            {Math.max(...dataPoints.map(d => d.y)).toFixed(1)}%
+            {peakY.toFixed(1)}%
           </div>
           <div className="text-xs text-muted-foreground">Peak</div>
         </div>

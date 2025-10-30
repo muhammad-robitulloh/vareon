@@ -6,10 +6,10 @@ import { Link } from "wouter";
 const divisions = [
   {
     icon: Brain,
-    title: "NeuroNet AI",
+    title: "Arcana AI",
     description: "Multi-model LLM orchestration with intent detection, code generation, and reasoning capabilities. The intelligent core powering the entire ecosystem.",
     features: ["Intent Detection", "Code Generation", "Shell Commands", "Reasoning System"],
-    href: "/neuronet",
+    href: "/arcana-demo",
     color: "text-primary"
   },
   {
@@ -17,7 +17,7 @@ const divisions = [
     title: "NEOSYNTIS Lab",
     description: "Interactive research dashboard for AI-powered development. Real-time collaboration, telemetry visualization, and intelligent task execution.",
     features: ["AI Chat Interface", "File Management", "WebSocket Terminal", "Analytics"],
-    href: "/neosyntis",
+    href: "/neosyntis-demi",
     color: "text-chart-2"
   },
   {
@@ -25,7 +25,7 @@ const divisions = [
     title: "MYNTRIX Core",
     description: "Manufacturing execution system adapted from NeuroNet architecture. Intelligent job planning, validation, and execution with human-in-loop safety.",
     features: ["Job Planning", "Safety Validation", "Dry-run Mode", "MQTT Integration"],
-    href: "/myntrix",
+    href: "/myntrix-demo",
     color: "text-chart-3"
   }
 ];
@@ -45,9 +45,9 @@ export default function DivisionsSection() {
 
         <div className="grid gap-8 md:grid-cols-3">
           {divisions.map((division) => (
-            <Card key={division.title} className="group relative overflow-hidden border border-card-border p-6 hover-elevate">
+            <Card key={division.title} className="group relative overflow-hidden border border-card-border p-6 transition-all duration-300 hover:shadow-lg hover:border-primary/50">
               <div className="mb-4">
-                <division.icon className={`h-12 w-12 ${division.color}`} />
+                <division.icon className={`h-12 w-12 ${division.color} transition-transform duration-300 group-hover:scale-110`} />
               </div>
               
               <h3 className="mb-3 text-2xl font-semibold text-foreground">
