@@ -1,6 +1,10 @@
 import { useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
+<<<<<<< HEAD
 import { useStore } from '../lib/store';
+=======
+import { useStore } from '@/lib/store';
+>>>>>>> 256d787b71407f821c87cd70daffce1a3f5749e5
 import {
   Layers,
   Search,

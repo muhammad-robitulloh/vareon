@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "./components/sidebar";
 import { ThemeProvider, ThemeToggle } from "./components/theme-provider";
 import { CommandPalette } from "./components/command-palette";
 import { AppSidebar } from "./components/app-sidebar";

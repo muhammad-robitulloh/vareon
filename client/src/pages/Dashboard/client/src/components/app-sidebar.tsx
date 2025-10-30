@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
-} from '@/components/ui/sidebar';
+} from '../../../../components/ui/sidebar';
 import {
   Layers,
   Search,

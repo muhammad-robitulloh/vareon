@@ -301,7 +301,14 @@ if __name__ == "__main__":
     # Parse arguments if run directly
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="0.0.0.0")
+<<<<<<< HEAD
     parser.add_argument("--port", type=int, default=8001)
     args, unknown = parser.parse_known_args() # Use parse_known_args to ignore args not defined here
 
     uvicorn.run(app, host=args.host, port=args.port)
+=======
+    parser.add_argument("--port", type=int, default=5000)
+    args, unknown = parser.parse_known_args() # Use parse_known_args to ignore args not defined here
+
+    uvicorn.run(app, host=args.host, port=args.port)
+>>>>>>> 256d787b71407f821c87cd70daffce1a3f5749e5

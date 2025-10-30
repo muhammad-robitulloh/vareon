@@ -1,42 +1,80 @@
-modules = ["nodejs-20", "web", "postgresql-16"]
-run = "npm run dev"
-hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+# ==============================================
+# ⚙️ REPLIT CONFIG — VAREON Multistage Workflow
+# ==============================================
 
+# Bahasa utama backend
+language = "python3"
+
+# Modul runtime yang dibutuhkan
+modules = ["nodejs-20", "python-3.10", "web", "postgresql-16"]
+
+# Channel Nix
 [nix]
 channel = "stable-24_05"
 
-[deployment]
-deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+# Dependensi Python
+[languages.python]
+  build = "pip install -r server-python/requirements.txt"
 
-[[ports]]
-localPort = 5000
-externalPort = 80
+# Dependensi NodeJS
+[languages.javascript]
+  build = "npm install"
 
+<<<<<<< HEAD
+=======
+# Direktori yang disembunyikan dari UI Replit
+hidden = [".config", ".git", "node_modules", "dist", "__pycache__"]
+
+# ==========================================================
+# 💡 ENVIRONMENT VARIABLES
+# ==========================================================
+>>>>>>> 256d787b71407f821c87cd70daffce1a3f5749e5
 [env]
 PORT = "5000"
+PYTHONUNBUFFERED = "1"
 
+# ==========================================================
+# 🧱 WORKFLOWS
+# ==========================================================
 [workflows]
-runButton = "Project"
+runButton = "Start VAREON Ecosystem"
 
+# 🧩 Workflow utama — jalankan build dan backend server
 [[workflows.workflow]]
-name = "Project"
-mode = "parallel"
+name = "Start VAREON Ecosystem"
 author = "agent"
+mode = "sequential"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
-
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
-
+# 1️⃣ Install dependencies backend (Python)
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+args = "pip install --no-cache-dir -r server-python/requirements.txt"
 
-[agent]
-integrations = ["javascript_websocket:1.0.0"]
+# 2️⃣ Install & build frontend React
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd ai_web_dashboard/frontend && npm install && npm run build"
+
+# 3️⃣ Jalankan backend FastAPI menggunakan Uvicorn
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server-python && uvicorn main:app --host 0.0.0.0 --port 5000"
+
+# ==========================================================
+# 🚀 DEPLOYMENT
+# ==========================================================
+[deployment]
+deploymentTarget = "autoscale"
+build = [
+  "pip install --no-cache-dir -r server-python/requirements.txt",
+  "cd ai_web_dashboard/frontend && npm install && npm run build"
+]
+run = [
+  "cd server-python && uvicorn main:app --host 0.0.0.0 --port 5000"
+]
+
+# ==========================================================
+# 📦 DEPENDENCIES
+# ==========================================================
+[deps]
+pkgs = ["python3", "python3-pip", "nodejs", "npm"]
