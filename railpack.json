@@ -1,14 +1,18 @@
 {
   "schemaVersion": 1,
   "name": "Vareon Dev Server",
-  "description": "Hybrid backend-frontend development server for the Vareon ecosystem.",
+  "description": "Hybrid Node + Python development server for the Vareon ecosystem.",
   "root": ".",
   "env": {
     "PYTHONUNBUFFERED": "1",
-    "PYTHONPATH": "."
+    "PYTHONPATH": ".",
+    "NODE_ENV": "development"
   },
+  "languages": ["python", "nodejs"],
   "commands": {
-    "prestart": "pip install -r server-python/requirements.txt",
+    "prebuild": "npm install --legacy-peer-deps",
+    "build": "pip install -r server-python/requirements.txt && cd client && npm install && npm run build",
+    "prestart": "echo 'Frontend and backend ready. Starting Python server...'",
     "start": "bash -c 'export $(grep -v '^#' server-python/.env | xargs) && python server-python/run.py --dev --with-frontend'"
   },
   "entrypoint": "bash -c 'export $(grep -v '^#' server-python/.env | xargs) && python server-python/run.py --dev --with-frontend'"
