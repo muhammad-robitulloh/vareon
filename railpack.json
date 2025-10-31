@@ -5,7 +5,8 @@
   "root": ".",
   "env": {
     "PYTHONUNBUFFERED": "1",
-    "PYTHONPATH": "."
+    "PYTHONPATH": ".",
+    "NODE_OPTIONS": "--max-old-space-size=256"
   },
   "packages": {
     "python": "3.11",
