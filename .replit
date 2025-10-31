@@ -1,38 +1,43 @@
-# .replit
-# This file configures how Replit runs your project.
+# Vareon Dev Server - Replit config
+# Menjalankan ekosistem hybrid (Python backend + Node frontend)
 
-# Specify the primary language, though Docker will override much of this.
-# This helps Replit infer default settings.
-language = "python"
+run = "python main.py"
 
-# Set the run command to start the application using the Dockerfile's CMD.
-# Replit will build and run the Dockerfile if present.
-# Here, we assume the Python server is the primary entry point after Docker build.
-run = "uvicorn server-python.main:app --host 0.0.0.0 --port 5000"
+language = "python3"
+entrypoint = "main.py"
 
-# Specify ports that your application exposes.
-# The Dockerfile exposes port 5000.
-[ports]
-5000 = { visibility = "public" }
-
-# Optionally, define tool-specific settings (e.g., for Uvicorn)
-[nix]
-pkgs = ["python3", "python3Packages.pip", "poetry", "nodejs", "npm"]
-
-# Entrypoint for the web process (if Replit doesn't fully rely on Dockerfile CMD)
-[web]
-# The command here should match your Dockerfile's CMD if you want Replit to
-# execute it after building the Docker image.
-# If `run` is sufficient, this might be redundant or override `run`.
-# For simplicity, we'll let `run` handle it if possible, otherwise, this.
-# For Docker based repls, the `run` command is usually executed inside the container.
-# This web config might be more relevant for non-Docker based Python repls.
-# Let's keep it simple and assume `run` works with Docker.
-# If issues, this might need modification or the use of `start-vareon.sh`
-# web_command = "uvicorn server-python.main:app --host 0.0.0.0 --port 5000"
-# web_port = 5000 # This ensures health checks work with the correct port.
-
-# Environment variables (add any needed for Replit deployment)
+# Mengatur environment agar path Python & Node sinkron
 [env]
-PYTHONUNBUFFERED = "1" # Ensures Python output is unbuffered
-# NODE_ENV = "production" # Already handled by npm run build in Dockerfile
+PYTHONUNBUFFERED = "1"
+PYTHONPATH = "."
+NODE_OPTIONS = "--max-old-space-size=256"
+
+# Versi paket yang diinginkan
+[packager]
+language = "python3"
+packageManager = "pip"
+
+# Tahapan instalasi otomatis
+[unitTests]
+install = """
+pip install -r server-python/requirements.txt
+if [ -d client ]; then
+  (npm ci --prefix client || npm install --prefix client)
+fi
+"""
+
+# Setup untuk Replit Nix environment
+[dependencies]
+python = "3.11"
+nodejs = "22"
+
+# File untuk debugging (optional)
+[debugger]
+path = "main.py"
+language = "python"
+args = []
+
+# Opsional: gunakan ini untuk mendefinisikan command custom di Shell Replit
+[scripts]
+start = "python main.py"
+install = "pip install -r server-python/requirements.txt && (npm ci --prefix client || npm install --prefix client)"
