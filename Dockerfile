@@ -3,7 +3,6 @@ FROM node:20-alpine AS frontend-builder
 
 # Set the working directory inside the container
 WORKDIR /app
-
 # Copy package.json and package-lock.json from the host's client directory
 # to the container's /app/client directory.
 # The source path is relative to the build context (project root).
