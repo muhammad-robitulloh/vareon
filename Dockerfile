@@ -17,6 +17,11 @@ WORKDIR /app/client
 # Install frontend dependencies
 RUN npm install
 
+WORKDIR /app
+
+COPY server ./server
+
+WORKDIR /app/server
 # Build the React application
 RUN npm run build
 
