@@ -17,7 +17,7 @@ const divisions = [
     title: "NEOSYNTIS Lab",
     description: "Interactive research dashboard for AI-powered development. Real-time collaboration, telemetry visualization, and intelligent task execution.",
     features: ["AI Chat Interface", "File Management", "WebSocket Terminal", "Analytics"],
-    href: "/neosyntis-demi",
+    href: "/neosyntis-demo",
     color: "text-chart-2"
   },
   {

@@ -27,7 +27,7 @@ export default function ChatInterface() {
     setIsTyping(true);
 
     try {
-      const response = await fetch("http://localhost:8001/api/chat/demo", {
+      const response = await fetch("/api/chat/demo", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
