@@ -1,12 +1,14 @@
 # Stage 1: Build the React frontend
 FROM node:20-alpine AS frontend-builder
 
-WORKDIR /app/client
+WORKDIR /app
 
-COPY client/package.json client/package-lock.json ./
+COPY client/package.json client/package-lock.json ./client/
+
+WORKDIR /app/client
 RUN npm install
 
-COPY client/ .
+COPY client/ ./
 RUN npm run build
 
 # Stage 2: Serve the Python backend and static frontend files
