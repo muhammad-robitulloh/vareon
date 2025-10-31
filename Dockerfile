@@ -8,8 +8,8 @@ WORKDIR /app
 # to the container's /app/client directory.
 # The source path is relative to the build context (project root).
 # The destination path is relative to the WORKDIR (/app).
-COPY client/package.json ./client/package.json
-COPY client/package-lock.json ./client/package-lock.json
+COPY package.json ./client/package.json
+COPY package-lock.json ./client/package-lock.json
 
 # Change to the client directory for npm commands
 WORKDIR /app/client
