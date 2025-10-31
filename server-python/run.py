@@ -39,7 +39,7 @@ def main():
     parser.add_argument("--dev", action="store_true", help="Run the development server with uvicorn.")
     parser.add_argument("--prod", action="store_true", help="Run the production server with gunicorn.")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host for the server.")
-    parser.add_argument("--port", type=int, default=8001, help="Port for the backend server. Default is 8001.")
+    parser.add_argument("--port", type=int, default=5000, help="Port for the backend server. Default is 5000.")
     parser.add_argument("--workers", type=int, default=4, help="Number of worker processes for gunicorn.")
     parser.add_argument("--with-frontend", action="store_true", help="Also build the Node.js frontend and serve it from FastAPI.")
     args = parser.parse_args()

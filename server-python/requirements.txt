@@ -1,20 +1,9 @@
-<<<<<<< HEAD
-fastapi==0.95.2
-pydantic==1.10.15
-uvicorn
-=======
 fastapi
 uvicorn[standard]
->>>>>>> 256d787b71407f821c87cd70daffce1a3f5749e5
 gunicorn
 python-jose[cryptography]
 python-multipart
 SQLAlchemy
 python-dotenv
-Flask
 httpx
-<<<<<<< HEAD
 email-validator
-=======
-email-validator
->>>>>>> 256d787b71407f821c87cd70daffce1a3f5749e5

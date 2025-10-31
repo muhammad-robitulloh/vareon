@@ -1,11 +1,10 @@
 {
-  "builder": "RAILPACK",
-  "setup": [
-    "cd server-python"
-  ],
-  "install": [
-    "pip install -r server-python/requirements.txt"
-  ],
-  "build": [],
-  "start": "python server-python/run.py --host 0.0.0.0 --port $PORT"
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "uvicorn server-python.main:app --host 0.0.0.0 --port 5000",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 10000
+  }
 }

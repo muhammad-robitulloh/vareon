@@ -42,10 +42,10 @@ app = FastAPI(
 # Adjust allow_origins as needed for your frontend deployment
 origins = [
     "http://localhost",
-    "http://localhost:3000", # React development server
-    "http://127.0.0.1:3000",
-    "http://localhost:8000", # Frontend served by Node.js server
-    "http://127.0.0.1:8000",
+    "http://localhost:3000", # Frontend development server
+    "http://127.0.0.1:3000", # Frontend development server
+    "http://localhost:5000", # React development server
+    "http://127.0.0.1:5000",
 ]
 
 app.add_middleware(
@@ -301,14 +301,8 @@ if __name__ == "__main__":
     # Parse arguments if run directly
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="0.0.0.0")
-<<<<<<< HEAD
-    parser.add_argument("--port", type=int, default=8001)
-    args, unknown = parser.parse_known_args() # Use parse_known_args to ignore args not defined here
-
-    uvicorn.run(app, host=args.host, port=args.port)
-=======
     parser.add_argument("--port", type=int, default=5000)
     args, unknown = parser.parse_known_args() # Use parse_known_args to ignore args not defined here
 
     uvicorn.run(app, host=args.host, port=args.port)
->>>>>>> 256d787b71407f821c87cd70daffce1a3f5749e5
+

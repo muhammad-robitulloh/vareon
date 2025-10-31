@@ -1,80 +1,38 @@
-# ==============================================
-# ⚙️ REPLIT CONFIG — VAREON Multistage Workflow
-# ==============================================
+# .replit
+# This file configures how Replit runs your project.
 
-# Bahasa utama backend
-language = "python3"
+# Specify the primary language, though Docker will override much of this.
+# This helps Replit infer default settings.
+language = "python"
 
-# Modul runtime yang dibutuhkan
-modules = ["nodejs-20", "python-3.10", "web", "postgresql-16"]
+# Set the run command to start the application using the Dockerfile's CMD.
+# Replit will build and run the Dockerfile if present.
+# Here, we assume the Python server is the primary entry point after Docker build.
+run = "uvicorn server-python.main:app --host 0.0.0.0 --port 5000"
 
-# Channel Nix
+# Specify ports that your application exposes.
+# The Dockerfile exposes port 5000.
+[ports]
+5000 = { visibility = "public" }
+
+# Optionally, define tool-specific settings (e.g., for Uvicorn)
 [nix]
-channel = "stable-24_05"
+pkgs = ["python3", "python3Packages.pip", "poetry", "nodejs", "npm"]
 
-# Dependensi Python
-[languages.python]
-  build = "pip install -r server-python/requirements.txt"
+# Entrypoint for the web process (if Replit doesn't fully rely on Dockerfile CMD)
+[web]
+# The command here should match your Dockerfile's CMD if you want Replit to
+# execute it after building the Docker image.
+# If `run` is sufficient, this might be redundant or override `run`.
+# For simplicity, we'll let `run` handle it if possible, otherwise, this.
+# For Docker based repls, the `run` command is usually executed inside the container.
+# This web config might be more relevant for non-Docker based Python repls.
+# Let's keep it simple and assume `run` works with Docker.
+# If issues, this might need modification or the use of `start-vareon.sh`
+# web_command = "uvicorn server-python.main:app --host 0.0.0.0 --port 5000"
+# web_port = 5000 # This ensures health checks work with the correct port.
 
-# Dependensi NodeJS
-[languages.javascript]
-  build = "npm install"
-
-<<<<<<< HEAD
-=======
-# Direktori yang disembunyikan dari UI Replit
-hidden = [".config", ".git", "node_modules", "dist", "__pycache__"]
-
-# ==========================================================
-# 💡 ENVIRONMENT VARIABLES
-# ==========================================================
->>>>>>> 256d787b71407f821c87cd70daffce1a3f5749e5
+# Environment variables (add any needed for Replit deployment)
 [env]
-PORT = "5000"
-PYTHONUNBUFFERED = "1"
-
-# ==========================================================
-# 🧱 WORKFLOWS
-# ==========================================================
-[workflows]
-runButton = "Start VAREON Ecosystem"
-
-# 🧩 Workflow utama — jalankan build dan backend server
-[[workflows.workflow]]
-name = "Start VAREON Ecosystem"
-author = "agent"
-mode = "sequential"
-
-# 1️⃣ Install dependencies backend (Python)
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pip install --no-cache-dir -r server-python/requirements.txt"
-
-# 2️⃣ Install & build frontend React
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd ai_web_dashboard/frontend && npm install && npm run build"
-
-# 3️⃣ Jalankan backend FastAPI menggunakan Uvicorn
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server-python && uvicorn main:app --host 0.0.0.0 --port 5000"
-
-# ==========================================================
-# 🚀 DEPLOYMENT
-# ==========================================================
-[deployment]
-deploymentTarget = "autoscale"
-build = [
-  "pip install --no-cache-dir -r server-python/requirements.txt",
-  "cd ai_web_dashboard/frontend && npm install && npm run build"
-]
-run = [
-  "cd server-python && uvicorn main:app --host 0.0.0.0 --port 5000"
-]
-
-# ==========================================================
-# 📦 DEPENDENCIES
-# ==========================================================
-[deps]
-pkgs = ["python3", "python3-pip", "nodejs", "npm"]
+PYTHONUNBUFFERED = "1" # Ensures Python output is unbuffered
+# NODE_ENV = "production" # Already handled by npm run build in Dockerfile
