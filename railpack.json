@@ -1,0 +1,9 @@
+{
+  "build": {
+    "command": "npm install"
+    "command": "pip install -r server-python/requirements.txt"
+  },
+  "start": {
+    "command": "python server-python/run.py --dev --with-frontend"
+  }
+}
