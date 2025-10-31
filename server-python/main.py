@@ -46,6 +46,7 @@ origins = [
     "http://127.0.0.1:3000", # Frontend development server
     "http://localhost:5000", # React development server
     "http://127.0.0.1:5000",
+    "vareon.up.railway.app:8080",
 ]
 
 app.add_middleware(
