@@ -3,15 +3,10 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-RUN mkdir -p client
-
-COPY client/package.json ./client/
-COPY client/package-lock.json ./client/
+COPY client ./client
 
 WORKDIR /app/client
 RUN npm install
-
-COPY client/ ./
 RUN npm run build
 
 # Stage 2: Serve the Python backend and static frontend files
