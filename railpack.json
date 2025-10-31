@@ -1,9 +1,12 @@
 {
-  "build": {
-    "command": "npm install"
-    "command": "pip install -r server-python/requirements.txt"
+  "schemaVersion": 1,
+  "name": "Vareon Dev Server",
+  "entrypoint": "python server-python/run.py --dev --with-frontend",
+  "root": ".",
+  "env": {
+    "PYTHONUNBUFFERED": "1"
   },
-  "start": {
-    "command": "python server-python/run.py --dev --with-frontend"
+  "commands": {
+    "start": "python server-python/run.py --dev --with-frontend"
   }
 }
