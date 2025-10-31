@@ -8,7 +8,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
-const API_BASE_URL = "http://localhost:5000"; // Define your API base URL
+const API_BASE_URL = ""; // Define your API base URL
 
 export default function VerifyEmail() {
   const [location] = useLocation();
