@@ -5,15 +5,15 @@
   "root": ".",
   "env": {
     "PYTHONUNBUFFERED": "1",
-    "PYTHONPATH": ".",
-    "NODE_ENV": "development"
+    "PYTHONPATH": "."
   },
-  "languages": ["python", "nodejs"],
+  "packages": {
+    "python": "3.11",
+    "node": "22"
+  },
   "commands": {
-    "prebuild": "npm install --legacy-peer-deps",
-    "build": "pip install -r server-python/requirements.txt && cd client && npm install && npm run build",
-    "prestart": "echo 'Frontend and backend ready. Starting Python server...'",
-    "start": "bash -c 'export $(grep -v '^#' server-python/.env | xargs) && python server-python/run.py --dev --with-frontend'"
+    "install": "pip install -r server-python/requirements.txt && (npm ci --prefix client || npm install --prefix client)"
+    "start": "python main.py"
   },
-  "entrypoint": "bash -c 'export $(grep -v '^#' server-python/.env | xargs) && python server-python/run.py --dev --with-frontend'"
+  "entrypoint": "python main.py"
 }
