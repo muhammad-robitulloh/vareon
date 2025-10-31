@@ -1,12 +1,15 @@
 {
   "schemaVersion": 1,
   "name": "Vareon Dev Server",
-  "entrypoint": "python server-python/run.py --dev --with-frontend",
+  "description": "Hybrid backend-frontend development server for the Vareon ecosystem.",
   "root": ".",
   "env": {
-    "PYTHONUNBUFFERED": "1"
+    "PYTHONUNBUFFERED": "1",
+    "PYTHONPATH": "."
   },
   "commands": {
-    "start": "python server-python/run.py --dev --with-frontend"
-  }
+    "prestart": "pip install -r server-python/requirements.txt",
+    "start": "bash -c 'export $(grep -v '^#' server-python/.env | xargs) && python server-python/run.py --dev --with-frontend'"
+  },
+  "entrypoint": "bash -c 'export $(grep -v '^#' server-python/.env | xargs) && python server-python/run.py --dev --with-frontend'"
 }
