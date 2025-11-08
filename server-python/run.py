@@ -96,6 +96,7 @@ def main():
 
         new_env = os.environ.copy()
         new_env["PYTHONPATH"] = project_root + os.pathsep + new_env.get("PYTHONPATH", "")
+        new_env["DATASET_STORAGE_DIR"] = os.path.join(script_dir, 'data', 'neosyntis_datasets')
 
         try:
                         backend_process = subprocess.Popen(

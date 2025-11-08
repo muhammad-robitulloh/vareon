@@ -162,7 +162,7 @@ from database import get_user_from_db, User # Keep other necessary imports
 
 # ... (rest of the file) ...
 
-async def get_current_user(token: str, db: Session = Depends(database.get_db)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
     logger.info(f"get_current_user received token: {token[:10]}...") # Log first 10 chars for security
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -186,7 +186,7 @@ async def get_current_user(token: str, db: Session = Depends(database.get_db)):
         logger.warning(f"User {token_data.username} not found in database, raising credentials_exception.")
         raise credentials_exception
     if not user.is_verified:
-        logger.warning(f"User {user.username} email not verified, raising 403 Forbidden.")
+        logger.warning(f"User {user.username} email not verified (is_verified: {user.is_verified}), raising 403 Forbidden.")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email not verified. Please check your email for a verification code."
@@ -213,9 +213,9 @@ def has_role(user: User, role_name: str) -> bool:
 
 def has_permission(user: User, permission_name: str) -> bool:
     for role in user.roles:
-        for permission in role.permissions:
-            if permission.name == permission_name:
-                return True
+        # Assuming role.permissions is List[str] as per schemas.py
+        if permission_name in role.permissions:
+            return True
     return False
 
 class RoleChecker:

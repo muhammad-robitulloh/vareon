@@ -87,37 +87,35 @@
 ### Checklist for Backend Realization V2: Myntrix Dashboard
 
 #### **General:**
-*   [ ] Review and confirm that the existing backend infrastructure (API framework, database, authentication, logging) can adequately support the new Myntrix dashboard features.
+*   [x] Review and confirm that the existing backend infrastructure (API framework, database, authentication, logging) can adequately support the new Myntrix dashboard features.
 *   [ ] Define and implement any shared utility functions or helper modules specific for Myntrix functionalities within the backend.
 
 #### **Agent Management:**
-*   **Database:**
-    *   [ ] Create `agents` table with columns: `id` (UUID/PK), `name` (TEXT), `type` (TEXT), `status` (TEXT), `health` (INTEGER), `lastRun` (DATETIME, nullable), `configuration` (JSONB/TEXT).
+*   [x] Create `agents` table with columns: `id` (UUID/PK), `name` (TEXT), `type` (TEXT), `status` (TEXT), `health` (INTEGER), `lastRun` (DATETIME, nullable), `configuration` (JSONB/TEXT).
 *   **API Endpoints:**
-    *   [ ] Implement `GET /api/myntrix/agents` to fetch all agents.
-    *   [ ] Implement `POST /api/myntrix/agents` to create a new agent.
-    *   [ ] Implement `POST /api/myntrix/agents/{id}/start` to start an agent.
+    *   [x] Implement `GET /api/myntrix/agents` to fetch all agents.
+    *   [x] Implement `POST /api/myntrix/agents` to create a new agent.
+    *   [x] Implement `POST /api/myntrix/agents/{id}/start` to start an agent.
         *   [ ] Develop logic to spawn/manage agent processes (e.g., `subprocess` module, Docker API).
-    *   [ ] Implement `POST /api/myntrix/agents/{id}/stop` to stop an agent.
+    *   [x] Implement `POST /api/myntrix/agents/{id}/stop` to stop an agent.
         *   [ ] Develop logic to gracefully terminate agent processes.
-    *   [ ] Implement `POST /api/myntrix/agents/{id}/restart` to restart an agent.
-    *   [ ] Implement `DELETE /api/myntrix/agents/{id}` to delete an agent.
+    *   [x] Implement `POST /api/myntrix/agents/{id}/restart` to restart an agent.
+    *   [x] Implement `DELETE /api/myntrix/agents/{id}` to delete an agent.
 *   **Business Logic:**
     *   [ ] Implement robust agent lifecycle management (start/stop/restart).
     *   [ ] Develop real-time health monitoring for agents (e.g., a periodic background task to check agent process status and resource usage).
 
 #### **Device Control:**
-*   **Database:**
-    *   [ ] Create `devices` table with columns: `id` (UUID/PK), `name` (TEXT), `type` (TEXT), `connectionString` (TEXT), `status` (TEXT, dynamic), `lastSeen` (DATETIME, dynamic), `firmwareVersion` (TEXT, nullable), `configuration` (JSONB/TEXT).
+*   [x] Create `devices` table with columns: `id` (UUID/PK), `name` (TEXT), `type` (TEXT), `connectionString` (TEXT), `status` (TEXT, dynamic), `lastSeen` (DATETIME, dynamic), `firmwareVersion` (TEXT, nullable), `configuration` (JSONB/TEXT).
 *   **API Endpoints:**
-    *   [ ] Implement `GET /api/myntrix/devices` to fetch all configured devices.
-    *   [ ] Implement `POST /api/myntrix/devices/{id}/connect` to connect to a device.
+    *   [x] Implement `GET /api/myntrix/devices` to fetch all configured devices.
+    *   [x] Implement `POST /api/myntrix/devices/{id}/connect` to connect to a device.
         *   [ ] Include logic to establish physical or network connection.
-    *   [ ] Implement `POST /api/myntrix/devices/{id}/disconnect` to disconnect from a device.
+    *   [x] Implement `POST /api/myntrix/devices/{id}/disconnect` to disconnect from a device.
         *   [ ] Include logic to gracefully close connection.
-    *   [ ] Implement `POST /api/myntrix/devices/{id}/command` to send a command to a device.
+    *   [x] Implement `POST /api/myntrix/devices/{id}/command` to send a command to a device.
         *   [ ] Develop device communication interface.
-    *   [ ] Implement `POST /api/myntrix/devices/{id}/upload` to upload a file.
+    *   [x] Implement `POST /api/myntrix/devices/{id}/upload` to upload a file.
         *   [ ] Handle multipart/form-data.
         *   [ ] Implement secure file transfer to the device.
 *   **WebSocket Endpoint:**
@@ -127,26 +125,26 @@
 
 #### **Resource Monitoring:**
 *   **Database:**
-    *   [ ] Create `jobs` table: `id` (UUID/PK), `name` (TEXT), `type` (TEXT), `status` (TEXT), `progress` (INTEGER), `createdAt` (DATETIME), `updatedAt` (DATETIME), `logs` (TEXT, nullable), `details` (JSONB/TEXT, nullable).
+    *   [x] Create `jobs` table: `id` (UUID/PK), `name` (TEXT), `type` (TEXT), `status` (TEXT), `progress` (INTEGER), `createdAt` (DATETIME), `updatedAt` (DATETIME), `logs` (TEXT, nullable), `details` (JSONB/TEXT, nullable).
     *   [ ] (Optional) Implement `system_metrics_history` table or integrate with a time-series database for long-term metric storage.
 *   **API Endpoints:**
-    *   [ ] Implement `GET /api/myntrix/system-metrics` to provide CPU/Memory usage.
+    *   [x] Implement `GET /api/myntrix/system-metrics` to provide CPU/Memory usage.
         *   [ ] Develop server-side logic to collect real-time system metrics (e.g., `psutil` in Python).
-    *   [ ] Implement `GET /api/myntrix/jobs` to provide job activity data.
+    *   [x] Implement `GET /api/myntrix/jobs` to provide job activity data.
         *   [ ] Integrate with the Task Scheduling service to retrieve and filter relevant job statuses.
 
 #### **Task Scheduling:**
 *   **Database:**
-    *   [ ] Create `scheduled_tasks` table: `id` (UUID/PK), `name` (TEXT), `schedule` (TEXT, cron expression), `action` (TEXT), `enabled` (BOOLEAN), `createdAt` (DATETIME), `updatedAt` (DATETIME).
-    *   [ ] Create `task_runs` table: `id` (UUID/PK), `taskId` (FK), `startTime` (DATETIME), `endTime` (DATETIME, nullable), `status` (TEXT), `logs` (TEXT, nullable).
+    *   [x] Create `scheduled_tasks` table: `id` (UUID/PK), `name` (TEXT), `schedule` (TEXT, cron expression), `action` (TEXT), `enabled` (BOOLEAN), `createdAt` (DATETIME), `updatedAt` (DATETIME).
+    *   [x] Create `task_runs` table: `id` (UUID/PK), `taskId` (FK), `startTime` (DATETIME), `endTime` (DATETIME, nullable), `status` (TEXT), `logs` (TEXT, nullable).
 *   **API Endpoints:**
-    *   [ ] Implement `GET /api/myntrix/tasks` to fetch all scheduled tasks.
-    *   [ ] Implement `GET /api/myntrix/tasks/history` to fetch task execution history.
-    *   [ ] Implement `POST /api/myntrix/tasks` to create a new task.
+    *   [x] Implement `GET /api/myntrix/tasks` to fetch all scheduled tasks.
+    *   [x] Implement `GET /api/myntrix/tasks/history` to fetch task execution history.
+    *   [x] Implement `POST /api/myntrix/tasks` to create a new task.
         *   [ ] Include validation for cron expressions.
-    *   [ ] Implement `POST /api/myntrix/tasks/{id}/run` to manually run a task.
-    *   [ ] Implement `PUT /api/myntrix/tasks/{id}` to update a task.
-    *   [ ] Implement `DELETE /api/myntrix/tasks/{id}` to delete a task.
+    *   [x] Implement `POST /api/myntrix/tasks/{id}/run` to manually run a task.
+    *   [x] Implement `PUT /api/myntrix/tasks/{id}` to update a task.
+    *   [x] Implement `DELETE /api/myntrix/tasks/{id}` to delete a task.
 *   **Business Logic:**
     *   [ ] Implement a robust background task scheduler process (e.g., using `APScheduler` or similar).
     *   [ ] Develop the logic to execute tasks based on their `action` type (e.g., trigger other APIs, run shell commands).
@@ -154,7 +152,7 @@
 
 #### **3D Visualization:**
 *   **API Endpoint:**
-    *   [ ] Implement `GET /api/myntrix/visualization-data` to provide a consolidated, real-time data payload for the 3D scene.
+    *   [x] Implement `GET /api/myntrix/visualization-data` to provide a consolidated, real-time data payload for the 3D scene.
 *   **Business Logic:**
     *   [ ] Aggregate data from agents and devices to dynamically create the visualization payload.
     *   [ ] Develop logic to compute dynamic properties (e.g., positions, status-driven colors, animation states) for the 3D elements based on the collected operational data.

@@ -48,6 +48,7 @@ export default function TaskSchedulerTab() {
   const [newTaskCronExpression, setNewTaskCronExpression] = useState('');
   const [newTaskAction, setNewTaskAction] = useState('workflow');
   const [date, setDate] = useState<Date>();
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false); // New state for Popover control
 
   const { data: scheduledTasks, isLoading, error } = useQuery({
     queryKey: ['/api/tasks'],
@@ -161,7 +162,7 @@ export default function TaskSchedulerTab() {
             </div>
             <div className="space-y-2">
               <Label>Cron Expression</Label>
-              <Popover>
+              <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
@@ -184,6 +185,7 @@ export default function TaskSchedulerTab() {
                       } else {
                         setNewTaskCronExpression('');
                       }
+                      setIsPopoverOpen(false); // Close popover after date selection
                     }}
                     initialFocus
                   />

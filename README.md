@@ -1,90 +1,139 @@
-# Dashboard Feature Implementation Roadmap
+# Vareon Backend
 
-This document outlines the roadmap and a detailed checklist for the full implementation and realization of all dashboard features within the Vareon ecosystem. The goal is to transition from the current UI structure, which uses mocked data, to a fully functional dashboard integrated with backend services.
+This repository contains the backend services for the Vareon project, built with FastAPI and Python. It provides various functionalities for AI orchestration, agent and device management, workflow automation, and machine learning models.
 
-## Roadmap Projection
+## Table of Contents
 
-The implementation will proceed in logical phases to ensure a stable and progressively functional dashboard.
+1.  [Features](#1-features)
+2.  [Installation](#2-installation)
+3.  [Running the Backend](#3-running-the-backend)
+4.  [API Documentation](#4-api-documentation)
+5.  [Ecosystem Overview](#5-ecosystem-overview)
+6.  [Implementation Details](#6-implementation-details)
+7.  [Libraries Used](#7-libraries-used)
+8.  [Testing](#8-testing)
 
-### Phase 1: Core Backend Integration & Data Fetching
-*   **Objective:** Establish reliable data fetching from backend APIs for all static and dynamic dashboard elements.
-*   **Key Tasks:**
-    *   Develop and expose backend API endpoints for system-wide status and individual module metrics.
-    *   Replace all mocked data (`mockSystemStatus`) in the frontend with actual API calls using `@tanstack/react-query`.
-    *   Implement basic error handling and loading states for data fetching.
+---
 
-### Phase 2: Real-time Updates & Interactivity
-*   **Objective:** Enable real-time data updates and ensure quick actions trigger actual backend processes.
-*   **Key Tasks:**
-    *   Integrate WebSocket or server-sent events (SSE) for real-time updates of system status and module metrics.
-    *   Connect "Quick Actions" buttons to their respective backend API endpoints, ensuring they perform the intended operations.
-    *   Implement user feedback mechanisms (e.g., toast notifications) for quick action results.
+## 1. Features
 
-### Phase 3: Robustness, Error Handling & Edge Cases
-*   **Objective:** Enhance the dashboard's resilience and user experience by handling various operational scenarios.
-*   **Key Tasks:**
-    *   Implement comprehensive error handling for all API interactions, displaying user-friendly messages.
-    *   Gracefully manage loading states, empty data scenarios, and network connectivity issues.
-    *   Address edge cases such as modules being offline, unresponsive, or returning malformed data.
+*   **User Authentication & Authorization**: Secure user management with JWT.
+*   **Arcana Core Services**: System status, context memory, LLM preferences, and interactive terminal management.
+*   **Cognisys Module**: LLM provider management, model routing, and chat interaction.
+*   **Myntrix Module**: Agent and device management, task scheduling, job monitoring, and system metrics.
+*   **Neosyntis Module**: Workflow management, dataset management, telemetry ingestion, and ML model lifecycle management.
+*   **Global Search**: Search across various entities in the Vareon ecosystem.
 
-### Phase 4: Module-Specific Dashboard Functionality
-*   **Objective:** Develop the detailed features and interfaces for each individual module's dashboard page.
-*   **Key Tasks:**
-    *   **ARCANA Dashboard:** Implement conversational AI interface, terminal integration, and context management features.
-    *   **MYNTRIX Dashboard:** Develop agent management, hardware integration, task orchestration, and 3D visualization interfaces.
-    *   **NEOSYNTIS Dashboard:** Implement workflow automation, dataset management, and intelligent search capabilities.
-    *   **COGNISYS Dashboard:** Develop multimodel routing configuration, intent detection, and reasoning visualization tools.
+## 2. Installation
 
-## Feature Checklist
+### Prerequisites
 
-This checklist details the specific tasks required to make each dashboard feature fully functional.
+*   Python 3.8+
+*   Node.js (for frontend development, if applicable)
+*   npm or yarn (for frontend development, if applicable)
 
-### 1. System Status Overview
-*   [x] **Backend API:** Create `/api/system/status` endpoint to return overall system health and module statuses.
-*   [x] **Frontend Integration:** Replace `mockSystemStatus` with data fetched from `/api/system/status`.
-*   [x] **Real-time Updates:** Implement WebSocket/SSE for live updates of system status and uptime.
-*   [x] **Error Handling:** Display appropriate messages if system status cannot be fetched.
+### Backend Setup
 
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/your-repo/vareon.git
+    cd vareon/server-python
+    ```
+2.  **Create a virtual environment**:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate
+    ```
+3.  **Install Python dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  **Environment Variables**:
+    Create a `.env` file in the `server-python/` directory based on `.env.example` and fill in the necessary values (e.g., `SECRET_KEY`, `OPENROUTER_API_KEY`, `SMTP_PASSWORD`).
 
-### 2. Module Monitoring Cards (ARCANA, MYNTRIX, NEOSYNTIS, COGNISYS)
-*   [x] **Backend APIs:**
-    *   [x] Create dedicated endpoints for each module to fetch its current status and detailed metrics (e.g., `/api/arcana/status`, `/api/myntrix/metrics`).
-    *   [x] Ensure metrics (e.g., active chats, jobs completed, active workflows) are dynamically retrieved.
-*   [x] **Frontend Integration:**
-    *   [x] Update each module card to fetch its status and metrics from the respective backend APIs.
-    *   [x] Ensure `StatusIndicator` accurately reflects the real-time status of each module.
-*   [x] **Navigation:** Verify that clicking each module card correctly navigates to its dedicated dashboard page (`/dashboard/arcana`, etc.).
-*   [x] **Real-time Updates:** Implement WebSocket/SSE for live updates of module statuses and metrics.
+## 3. Running the Backend
 
-### 3. Quick Actions
-*   [x] **Backend APIs:**
-    *   [x] Develop backend endpoints for each quick action (e.g., `/api/neosyntis/open-lab`, `/api/arcana/start-chat`, `/api/myntrix/deploy-model`, `/api/myntrix/manage-agents`).
-    *   [x] Ensure these endpoints perform the intended operations.
-*   [x] **Frontend Integration:**
-    *   Connect each quick action button to its corresponding backend API call.
-    *   Implement loading states for buttons during API calls.
-    *   Display success/error toast notifications based on API responses.
+### Development Mode
 
-### 4. Module-Specific Dashboards
-*   **ARCANA Dashboard (`/dashboard/arcana`):**
-    *   [x] **Backend:** Integrate conversational AI functionalities.
-    *   [x] **Backend:** Implement interactive terminal features.
-    *   [x] **Frontend:** Develop UI for context-aware memory management.
-*   **MYNTRIX Dashboard (`/dashboard/myntrix`):**
-    *   [x] **Backend:** Integrate agent management and control.
-    *   [x] **Backend:** Implement interfaces for hardware integration.
-    *   [x] **Frontend:** Develop UI for task orchestration.
-    *   [x] **Frontend:** Develop UI for 3D visualization.
-*   **NEOSYNTIS Dashboard (`/dashboard/neosyntis`):**
-    *   [x] **Backend:** Integrate workflow automation tools.
-    *   [x] **Backend:** Implement dataset management interfaces.
-    *   [x] **Frontend:** Develop UI for intelligent search capabilities.
-*   **COGNISYS Dashboard (`/dashboard/cognisys`):**
-    *   [x] **Backend:** Integrate multimodel routing configuration.
-    *   [x] **Frontend:** Implement UI for intent detection and reasoning visualization.
+To run the backend in development mode with Uvicorn:
 
-### 5. General Dashboard Enhancements
-*   [x] **User Permissions:** Implement role-based access control (RBAC) for dashboard features and module access.
-*   [x] **Logging & Auditing:** Integrate backend logging for all critical dashboard actions.
-*   [x] **Performance Optimization:** Optimize data fetching and UI rendering for large datasets or high-frequency updates.
-*   [x] **Testing:** Develop comprehensive unit, integration, and end-to-end tests for all dashboard functionalities.
+```bash
+python run.py --dev
+```
+
+If you also want to build and serve the frontend (assuming it's in `../client`):
+
+```bash
+python run.py --dev --with-frontend
+```
+
+### Production Mode
+
+To run the backend in production mode with Gunicorn:
+
+```bash
+python run.py --prod --workers 4
+```
+
+## 4. API Documentation
+
+Detailed API documentation, including all available endpoints, request/response models, and authentication requirements, can be found in:
+
+*   [API Documentation](documentation.md)
+
+## 5. Ecosystem Overview
+
+For a high-level understanding of the interconnections and data flow between the different modules in the Vareon ecosystem, refer to:
+
+*   [Ecosystem Diagram](diagram.md)
+
+## 6. Implementation Details
+
+For a detailed plan on implementing currently mocked backend functions and strategies for fallback logic in restricted environments, refer to:
+
+*   [Implementation Details V5](ImplementationV5.md)
+
+## 7. Libraries Used
+
+### Python Backend Libraries (from `requirements.txt`)
+
+*   `fastapi`: Web framework for building APIs.
+*   `uvicorn`: ASGI server for running FastAPI applications.
+*   `gunicorn`: WSGI HTTP server for Unix (used in production).
+*   `python-jose[cryptography]`: JOSE (JSON Object Signing and Encryption) for JWT.
+*   `python-multipart`: For handling form data, especially file uploads.
+*   `SQLAlchemy`: SQL toolkit and Object-Relational Mapper (ORM).
+*   `python-dotenv`: Reads key-value pairs from a `.env` file.
+*   `httpx`: A fully featured HTTP client for Python.
+*   `email-validator`: For email address validation.
+*   `cryptography`: Cryptographic recipes and primitives.
+*   `psutil`: Cross-platform library for retrieving process and system utilization.
+
+### Frontend/Shared Libraries (from `package.json` - selected key libraries)
+
+*   `react`, `react-dom`: JavaScript library for building user interfaces.
+*   `typescript`: Superset of JavaScript that compiles to plain JavaScript.
+*   `vite`: Next generation frontend tooling.
+*   `tailwindcss`: A utility-first CSS framework.
+*   `drizzle-orm`, `drizzle-kit`: TypeScript ORM for SQL databases.
+*   `@tanstack/react-query`: Hooks for fetching, caching and updating asynchronous data in React.
+*   `zustand`: A small, fast, and scalable bearbones state-management solution.
+*   `@monaco-editor/react`: Monaco Editor for React.
+*   `@xterm/xterm`, `@xterm/addon-web-links`: Terminal emulator for the web.
+*   `@xyflow/react`: Library for building interactive node-based editors.
+*   `three`, `@react-three/fiber`, `@react-three/drei`: For 3D graphics.
+*   `lucide-react`: Beautifully simple and consistent icon toolkit.
+*   `framer-motion`: A production-ready motion library for React.
+*   `zod`: TypeScript-first schema declaration and validation library.
+
+## 8. Testing
+
+Unit and integration tests are written using `pytest`.
+
+To run the tests for a specific module (e.g., Cognisys):
+
+```bash
+DATASET_STORAGE_DIR=/data/data/com.termux/files/home/VE/V/VE/Vareon/server-python/data/neosyntis_datasets pytest server-python/tests/test_cognisys.py
+```
+
+Replace `test_cognisys.py` with `test_myntrix.py`, `test_neosyntis.py`, or `test_arcana.py` to run tests for other modules.
