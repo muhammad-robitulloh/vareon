@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Badge } from '@/components/ui';
 import { mockModels } from '@/lib/dashboard/mockApi';
 import { Network, Zap } from 'lucide-react';
 import * as d3 from 'd3';

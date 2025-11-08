@@ -6,6 +6,7 @@ import logging
 import atexit
 import select # For non-blocking I/O
 import time
+from dotenv import load_dotenv # Import load_dotenv
 
 # --- Logging ---
 logging.basicConfig(
@@ -35,6 +36,10 @@ def cleanup_processes():
 atexit.register(cleanup_processes)
 
 def main():
+    # Load environment variables from .env file
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    load_dotenv(os.path.join(script_dir, '.env')) # Explicitly load .env
+
     parser = argparse.ArgumentParser(description="Vareon FastAPI Backend Runner")
     parser.add_argument("--dev", action="store_true", help="Run the development server with uvicorn.")
     parser.add_argument("--prod", action="store_true", help="Run the production server with gunicorn.")
@@ -88,22 +93,25 @@ def main():
 
         # --- Start Python Backend ---
         logger.info(f"Starting Python backend development server on http://{args.host}:{args.port}")
+
+        new_env = os.environ.copy()
+        new_env["PYTHONPATH"] = project_root + os.pathsep + new_env.get("PYTHONPATH", "")
+
         try:
-            backend_process = subprocess.Popen(
-                [
-                    sys.executable,
-                    os.path.join(script_dir, "main.py"),
-                    "--host", args.host,
-                    "--port", str(args.port)
-                ],
-                cwd=script_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1 # Line-buffered output
-            )
-            running_processes.append(backend_process)
-            logger.info(f"Python backend started with PID: {backend_process.pid}")
+                        backend_process = subprocess.Popen(
+                            [
+                                sys.executable, "-m", "uvicorn",
+                                "server-python.main:app",
+                                "--host", args.host,
+                                "--port", str(args.port)
+                            ],
+                            cwd=script_dir,
+                            env=new_env, # Pass current environment variables
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE
+                        )
+                        running_processes.append(backend_process)
+                        logger.info(f"Python backend started with PID: {backend_process.pid}")
 
         except Exception as e:
             logger.error(f"Failed to start Python backend: {e}")
@@ -130,14 +138,13 @@ def main():
                 # Check if any process has exited
                 for proc in list(running_processes): # Iterate over a copy
                     if proc.poll() is not None: # Process has exited
-                        logger.error(f"Process with PID {proc.pid} exited unexpectedly with status {proc.poll()}.")
-                        running_processes.remove(proc)
-                        # Attempt to read any remaining output
-                        for line in proc.stdout.readlines():
-                            logger.info(f"[Process {proc.pid} STDOUT] {line.strip()}")
-                        for line in proc.stderr.readlines():
-                            logger.error(f"[Process {proc.pid} STDERR] {line.strip()}")
-                        if not running_processes: # If all processes exited, break
+                        stderr_output = proc.stderr.read().decode('utf-8')
+                        if stderr_output:
+                            logger.error(f"Backend process (PID: {proc.pid}) exited with status {proc.poll()}. Stderr:\n{stderr_output}")
+                        else:
+                            logger.error(f"Backend process (PID: {proc.pid}) exited with status {proc.poll()}. No stderr output.")
+                        running_processes.remove(proc) # Remove the exited process
+                        if not running_processes:
                             break
 
                 if not running_processes:
@@ -151,12 +158,13 @@ def main():
                     stream, prefix = pipes[fd]
                     line = stream.readline() # Read a line
                     if line:
+                        decoded_line = line.decode('utf-8').strip()
                         # Special handling for Uvicorn's INFO messages from stderr
                         # Uvicorn often logs INFO to stderr, which we don't want to label as ERROR
-                        if prefix == "[Backend ERROR]" and "INFO:" in line:
-                            logger.info(f"[Backend] {line.strip()}") # Log as INFO
+                        if prefix == "[Backend ERROR]" and "INFO:" in decoded_line:
+                            logger.info(f"[Backend] {decoded_line}") # Log as INFO
                         else:
-                            logger.info(f"{prefix} {line.strip()}")
+                            logger.info(f"{prefix} {decoded_line}")
                     
         except KeyboardInterrupt:
             logger.info("Ctrl+C detected. Initiating graceful shutdown.")

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui';
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth"; // Import useAuth hook

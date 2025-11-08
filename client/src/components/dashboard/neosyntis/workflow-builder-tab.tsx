@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -12,11 +12,10 @@ import {
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Workflow, Play, Save, Plus } from 'lucide-react';
-import { mockWorkflowNodes, mockWorkflowEdges } from '@/lib/dashboard/mockApi';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Badge } from '@/components/ui';
+import { Workflow, Play, Save, Plus, Activity } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/dashboard/use-toast';
 
 const nodeTypes = {
   input: ({ data }: { data: any }) => (
@@ -53,13 +52,111 @@ const nodeTypes = {
 };
 
 export default function WorkflowBuilderTab() {
-  const [nodes, onNodesChange] = useNodesState(mockWorkflowNodes as Node[]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(mockWorkflowEdges as Edge[]);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [workflowId, setWorkflowId] = useState<string | null>(null); // State to hold the current workflow ID
+
+  const { data: workflowData, isLoading, error } = useQuery({
+    queryKey: ['workflow', workflowId],
+    queryFn: async () => {
+      if (!workflowId) return { nodes: [], edges: [] }; // Return empty if no workflowId
+      const response = await fetch(`/api/workflows/${workflowId}`);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    },
+    enabled: !!workflowId, // Only run query if workflowId is available
+    initialData: { nodes: [], edges: [] },
+  });
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(workflowData.nodes as Node[]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(workflowData.edges as Edge[]);
+
+  useEffect(() => {
+    setNodes(workflowData.nodes as Node[]);
+    setEdges(workflowData.edges as Edge[]);
+  }, [workflowData, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
+
+  const saveWorkflowMutation = useMutation({
+    mutationFn: async (workflow: { nodes: Node[]; edges: Edge[] }) => {
+      const method = workflowId ? 'PUT' : 'POST';
+      const url = workflowId ? `/api/workflows/${workflowId}` : '/api/workflows';
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(workflow),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to save workflow');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: 'Workflow Saved', description: 'Workflow has been successfully saved.' });
+      if (!workflowId && data.id) {
+        setWorkflowId(data.id); // Set workflowId if it's a new workflow
+      }
+      queryClient.invalidateQueries({ queryKey: ['workflow', workflowId] });
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to save workflow: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
+  const runWorkflowMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/workflows/${id}/run`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to run workflow');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Workflow Started', description: 'Workflow execution initiated.' });
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to run workflow: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
+  const addNodeMutation = useMutation({
+    mutationFn: async (nodeData: any) => {
+      if (!workflowId) {
+        throw new Error('Cannot add node without a workflow. Please save the workflow first.');
+      }
+      const response = await fetch(`/api/workflows/${workflowId}/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nodeData),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to add node');
+      }
+      return response.json();
+    },
+    onSuccess: (newNode) => {
+      setNodes((nds) => nds.concat(newNode));
+      toast({ title: 'Node Added', description: 'New node added to workflow.' });
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to add node: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
+  if (isLoading) {
+    return <div className="p-6 text-center">Loading workflow...</div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-center text-red-500">Error loading workflow: {error.message}</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -76,16 +173,35 @@ export default function WorkflowBuilderTab() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" data-testid="button-add-node">
-                <Plus className="h-4 w-4 mr-2" />
+              <Button
+                variant="outline"
+                data-testid="button-add-node"
+                onClick={() => addNodeMutation.mutate({
+                  id: `node-${Date.now()}`,
+                  type: 'llm',
+                  position: { x: Math.random() * 250, y: Math.random() * 250 },
+                  data: { label: 'New LLM Node', model: 'GPT-3.5' },
+                })}
+                disabled={addNodeMutation.isPending || !workflowId}
+              >
+                {addNodeMutation.isPending ? <Activity className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
                 Add Node
               </Button>
-              <Button variant="outline" data-testid="button-save-workflow">
-                <Save className="h-4 w-4 mr-2" />
+              <Button
+                variant="outline"
+                data-testid="button-save-workflow"
+                onClick={() => saveWorkflowMutation.mutate({ nodes, edges })}
+                disabled={saveWorkflowMutation.isPending}
+              >
+                {saveWorkflowMutation.isPending ? <Activity className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                 Save
               </Button>
-              <Button data-testid="button-run-workflow">
-                <Play className="h-4 w-4 mr-2" />
+              <Button
+                data-testid="button-run-workflow"
+                onClick={() => workflowId && runWorkflowMutation.mutate(workflowId)}
+                disabled={runWorkflowMutation.isPending || !workflowId}
+              >
+                {runWorkflowMutation.isPending ? <Activity className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
                 Run
               </Button>
             </div>

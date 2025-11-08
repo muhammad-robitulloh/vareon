@@ -1,0 +1,9 @@
+export { default as DatasetTab } from './dataset-tab';
+export { default as SearchEngineTab } from './search-engine-tab';
+export { default as WorkflowBuilderTab } from './workflow-builder-tab';
+export { default as TelemetryTab } from './telemetry-tab';
+export { default as DeviceSettingsTab } from './device-settings-tab';
+export { default as CognisysConfigTab } from './cognisys-config-tab';
+export { default as EcosystemBuilderTab } from './ecosystem-builder-tab';
+export { default as ModelDeploymentTab } from './model-deployment-tab';
+export { default as MachineLearningTab } from './machine-learning-tab';

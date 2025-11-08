@@ -1,5 +1,4 @@
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, Button } from '@/components/ui';
 import { Brain, FlaskConical, Cpu, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 

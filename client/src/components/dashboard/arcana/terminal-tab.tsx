@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import 'xterm/css/xterm.css';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, Button, Tabs, TabsList, TabsTrigger } from '@/components/ui';
 import { Plus, X } from 'lucide-react';
 
 interface TerminalInstance {
@@ -12,20 +11,24 @@ interface TerminalInstance {
   name: string;
   terminal: XTerm;
   fitAddon: FitAddon;
+  ws: WebSocket;
 }
 
 export default function TerminalTab() {
+  console.log('TerminalTab component rendered');
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const [terminals, setTerminals] = useState<TerminalInstance[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string>('');
+  const [fontSize, setFontSize] = useState<number>(10); // Default font size
 
   const createTerminal = () => {
+    console.log('createTerminal called');
     const id = Date.now().toString();
     const name = `Terminal ${terminals.length + 1}`;
-    
+
     const terminal = new XTerm({
       cursorBlink: true,
-      fontSize: 14,
+      fontSize: fontSize, // Use the fontSize state
       fontFamily: 'JetBrains Mono, monospace',
       theme: {
         background: 'hsl(var(--background))',
@@ -44,58 +47,80 @@ export default function TerminalTab() {
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
+    const webLinksAddon = new WebLinksAddon(); // Initialize WebLinksAddon
+    terminal.loadAddon(webLinksAddon); // Load WebLinksAddon
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const accessToken = localStorage.getItem("access_token");
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/shell/${id}?token=${accessToken}`);
+
+    ws.onopen = () => {
+      console.log(`Terminal ${id} WebSocket connected`);
+      terminal.writeln('Welcome to ARCANA Terminal');
+      terminal.writeln('Cognitive Shell Interface v2.1.0');
+      terminal.writeln('');
+      terminal.write('$ ');
+      // Send initial terminal dimensions to the backend
+      fitAddon.fit(); // Call fit() here
+      ws.send(JSON.stringify({ resize: { cols: terminal.cols, rows: terminal.rows } })); // Corrected format
+    };
+
+    ws.onmessage = (event) => {
+      if (typeof event.data === 'string') {
+        terminal.write(event.data);
+      } else if (event.data instanceof ArrayBuffer) {
+        const decoder = new TextDecoder('utf-8');
+        terminal.write(decoder.decode(event.data));
+      } else if (event.data instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          terminal.write(reader.result as string);
+        };
+        reader.readAsText(event.data);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log(`Terminal ${id} WebSocket disconnected`);
+      terminal.writeln('\n\rConnection to terminal backend lost.');
+    };
+
+    ws.onerror = (error) => {
+      console.error(`Terminal ${id} WebSocket error:`, error);
+      terminal.writeln('\n\rTerminal connection error.');
+    };
+
+    terminal.onData((data) => {
+      console.log(`terminal.onData for ${id}. Data: ${data}`);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data); // Send raw data for input
+      }
+    });
+
+    terminal.onResize((size) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ resize: { cols: size.cols, rows: size.rows } })); // Corrected format
+      }
+    });
 
     const newTerminal: TerminalInstance = {
       id,
       name,
       terminal,
       fitAddon,
+      ws, // Store WebSocket instance
     };
 
-    setTerminals([...terminals, newTerminal]);
+    setTerminals((prevTerminals) => [...prevTerminals, newTerminal]);
     setActiveTerminal(id);
-
-    setTimeout(() => {
-      if (terminalContainerRef.current) {
-        terminal.open(terminalContainerRef.current);
-        fitAddon.fit();
-
-        terminal.writeln('Welcome to ARCANA Terminal');
-        terminal.writeln('Cognitive Shell Interface v2.1.0');
-        terminal.writeln('');
-        terminal.write('$ ');
-
-        let currentLine = '';
-        terminal.onData((data) => {
-          if (data === '\r') {
-            terminal.writeln('');
-            
-            if (currentLine.trim()) {
-              const command = currentLine.trim();
-              terminal.writeln(`Mock output for: ${command}`);
-              terminal.writeln('This would execute the command in production');
-            }
-            
-            terminal.write('$ ');
-            currentLine = '';
-          } else if (data === '\u007F') {
-            if (currentLine.length > 0) {
-              currentLine = currentLine.slice(0, -1);
-              terminal.write('\b \b');
-            }
-          } else {
-            currentLine += data;
-            terminal.write(data);
-          }
-        });
-      }
-    }, 100);
   };
 
   const closeTerminal = (id: string) => {
+    console.log(`closeTerminal called for ${id}`);
     const terminalToClose = terminals.find(t => t.id === id);
     if (terminalToClose) {
       terminalToClose.terminal.dispose();
+      terminalToClose.ws.close(); // Close WebSocket connection
     }
     
     const newTerminals = terminals.filter(t => t.id !== id);
@@ -103,27 +128,81 @@ export default function TerminalTab() {
     
     if (activeTerminal === id && newTerminals.length > 0) {
       setActiveTerminal(newTerminals[0].id);
+    } else if (activeTerminal === id && newTerminals.length === 0) {
+      setActiveTerminal(''); // No active terminal if all are closed
     }
   };
 
+  const handleFontSizeChange = (change: number) => {
+    setFontSize((prevSize) => {
+      const newSize = Math.max(5, Math.min(20, prevSize + change)); // Clamp between 5 and 20
+      terminals.forEach(t => {
+        t.terminal.options.fontSize = newSize; // Use direct option setting
+        t.fitAddon.fit();
+      });
+      return newSize;
+    });
+  };
+
   useEffect(() => {
+    console.log('useEffect [terminals] triggered. terminals.length:', terminals.length);
     if (terminals.length === 0) {
       createTerminal();
     }
 
+    const resizeObserver = new ResizeObserver(() => { // Integrate ResizeObserver
+      console.log('ResizeObserver triggered.');
+      terminals.forEach(t => t.fitAddon.fit());
+    });
+
+    if (terminalContainerRef.current) {
+      console.log('Observing terminalContainerRef.current for resize.');
+      resizeObserver.observe(terminalContainerRef.current);
+    } else {
+      console.warn('terminalContainerRef.current is null in useEffect [terminals]. Cannot observe for resize.');
+    }
+
     return () => {
-      terminals.forEach(t => t.terminal.dispose());
+      console.log('useEffect [terminals] cleanup function executed.');
+      terminals.forEach(t => {
+        console.log(`Disposing terminal ${t.id}.`);
+        t.terminal.dispose();
+        // t.ws.close(); // Removed: WebSocket should only be closed when explicitly closing a terminal
+      });
+      resizeObserver.disconnect(); // Disconnect ResizeObserver
     };
-  }, []);
+  }, [terminals]); // Added terminals to dependency array
 
   useEffect(() => {
+    console.log('useEffect [activeTerminal] triggered. activeTerminal:', activeTerminal);
     const activeT = terminals.find(t => t.id === activeTerminal);
+
+    // Detach all other terminals from the DOM
+    terminals.forEach(t => {
+      if (t.id !== activeTerminal && t.terminal.element && t.terminal.element.parentNode) {
+        t.terminal.element.parentNode.removeChild(t.terminal.element);
+        console.log(`Detached terminal ${t.id}`);
+      }
+    });
+
     if (activeT && terminalContainerRef.current) {
-      terminalContainerRef.current.innerHTML = '';
-      activeT.terminal.open(terminalContainerRef.current);
+      console.log(`Attempting to display terminal ${activeT.id} in container.`);
+      // If the terminal is not currently attached to the DOM, attach it
+      if (!activeT.terminal.element || activeT.terminal.element.parentNode !== terminalContainerRef.current) {
+        // Clear previous content if any, before attaching the new terminal
+        if (terminalContainerRef.current.innerHTML !== '') {
+          terminalContainerRef.current.innerHTML = '';
+        }
+        activeT.terminal.open(terminalContainerRef.current);
+        console.log(`Terminal ${activeT.id} opened/reattached.`);
+      }
+      activeT.terminal.focus(); // Ensure the active terminal has focus
       activeT.fitAddon.fit();
+      console.log(`FitAddon.fit() called for terminal ${activeT.id}.`);
+    } else {
+      console.warn('No active terminal or terminalContainerRef.current is null in useEffect [activeTerminal].');
     }
-  }, [activeTerminal]);
+  }, [activeTerminal, terminals]); // Added terminals to dependency array for activeT find
 
   return (
     <div className="h-full flex flex-col p-6">
@@ -149,7 +228,7 @@ export default function TerminalTab() {
                         className="ml-1 hover:bg-muted rounded-sm p-0.5"
                         data-testid={`button-close-terminal-${term.id}`}
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-4 w-4" />
                       </button>
                     )}
                   </TabsTrigger>
@@ -165,6 +244,11 @@ export default function TerminalTab() {
               </Button>
             </div>
           </Tabs>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => handleFontSizeChange(-1)}>-</Button>
+            <span>{fontSize}px</span>
+            <Button variant="ghost" size="sm" onClick={() => handleFontSizeChange(1)}>+</Button>
+          </div>
         </div>
 
         <div className="flex-1 p-4 overflow-hidden">

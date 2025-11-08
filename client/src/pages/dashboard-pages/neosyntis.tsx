@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useSearch, useLocation } from 'wouter';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger, Badge } from '@/components/ui';
 import { Search, Database, Workflow, BarChart3, Settings, Network, Box, Upload, Brain } from 'lucide-react';
-import SearchEngineTab from '@/components/dashboard/neosyntis/search-engine-tab';
-import DatasetTab from '@/components/dashboard/neosyntis/dataset-tab';
-import WorkflowBuilderTab from '@/components/dashboard/neosyntis/workflow-builder-tab';
-import TelemetryTab from '@/components/dashboard/neosyntis/telemetry-tab';
-import DeviceSettingsTab from '@/components/dashboard/neosyntis/device-settings-tab';
-import CognisysConfigTab from '@/components/dashboard/neosyntis/cognisys-config-tab';
-import EcosystemBuilderTab from '@/components/dashboard/neosyntis/ecosystem-builder-tab';
-import ModelDeploymentTab from '@/components/dashboard/neosyntis/model-deployment-tab';
-import MachineLearningTab from '@/components/dashboard/neosyntis/machine-learning-tab';
+import {
+  SearchEngineTab,
+  DatasetTab,
+  WorkflowBuilderTab,
+  TelemetryTab,
+  DeviceSettingsTab,
+  CognisysConfigTab,
+  EcosystemBuilderTab,
+  ModelDeploymentTab,
+  MachineLearningTab,
+} from '@/components/dashboard/neosyntis';
 
 const tabs = [
   { value: 'search', label: 'Search Engine', icon: Search },

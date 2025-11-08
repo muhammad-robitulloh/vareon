@@ -2,7 +2,7 @@ import { ThemeToggle } from "@/components/dashboard/theme-provider";
 import {
   SidebarContent,
   SidebarFooter,
-} from '@/components/ui/sidebar';
+} from '@/components/ui';
 
 export function MainSidebarContent() {
   return (

@@ -1,40 +1,109 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Database, Plus, Upload, ExternalLink, Download, Trash2 } from 'lucide-react';
-import { mockDatasets } from '@/lib/dashboard/mockApi';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Input, Badge, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui';
+import { Database, Plus, Upload, ExternalLink, Download, Trash2, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/dashboard/use-toast';
+
+import { Dataset } from './types';
 
 export default function DatasetTab() {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { data: datasets } = useQuery({
-    queryKey: ['/api/datasets'],
-    initialData: mockDatasets,
+  const { data: datasets, isLoading, error } = useQuery<Dataset[]>({
+    queryKey: ['/api/neosyntis/datasets'],
+    queryFn: async () => {
+      const response = await fetch('/api/neosyntis/datasets');
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    },
   });
 
-  const filteredDatasets = datasets?.filter(d =>
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [newDatasetName, setNewDatasetName] = useState('');
+  const [newDatasetDescription, setNewDatasetDescription] = useState('');
+  const [newDatasetType, setNewDatasetType] = useState('custom');
+
+  const createDatasetMutation = useMutation({
+    mutationFn: async (datasetData: { name: string; description: string; type: string }) => {
+      const response = await fetch('/api/neosyntis/datasets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datasetData),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to create dataset');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/neosyntis/datasets'] });      setNewDatasetName('');
+      setNewDatasetDescription('');
+      setNewDatasetType('custom');
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to create dataset: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
+  const uploadDatasetMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/neosyntis/datasets/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error('Failed to upload dataset');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Dataset Uploaded', description: 'Dataset file successfully uploaded.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/neosyntis/datasets'] });
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to upload dataset: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
+  const deleteDatasetMutation = useMutation({
+    mutationFn: async (datasetId: string) => {
+      const response = await fetch(`/api/neosyntis/datasets/${datasetId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error('Failed to delete dataset');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Dataset Deleted', description: 'Dataset has been successfully deleted.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/neosyntis/datasets'] });
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to delete dataset: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
+  const filteredDatasets = datasets?.filter((d: Dataset) =>
     d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     d.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (isLoading) {
+    return <div className="p-6 text-center">Loading datasets...</div>;
+  }
+
+  if (error) {
+    console.error("Error loading datasets:", error);
+    return <div className="p-6 text-center text-red-500">Error loading datasets: {error.message}</div>;
+  }
+
+  console.log("Datasets:", datasets);
+  console.log("Filtered Datasets:", filteredDatasets);
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -67,15 +136,30 @@ export default function DatasetTab() {
                 <div className="space-y-4 pt-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Dataset Name</label>
-                    <Input placeholder="My Custom Dataset" data-testid="input-dataset-name" />
+                    <Input
+                      placeholder="My Custom Dataset"
+                      data-testid="input-dataset-name"
+                      value={newDatasetName}
+                      onChange={(e) => setNewDatasetName(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Description</label>
-                    <Input placeholder="Dataset description..." data-testid="input-dataset-description" />
+                    <Input
+                      placeholder="Dataset description..."
+                      data-testid="input-dataset-description"
+                      value={newDatasetDescription}
+                      onChange={(e) => setNewDatasetDescription(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Type</label>
-                    <select className="w-full h-9 rounded-md border px-3 text-sm" data-testid="select-dataset-type">
+                    <select
+                      className="w-full h-9 rounded-md border px-3 text-sm"
+                      data-testid="select-dataset-type"
+                      value={newDatasetType}
+                      onChange={(e) => setNewDatasetType(e.target.value)}
+                    >
                       <option value="custom">Custom</option>
                       <option value="qa">Question-Answer</option>
                       <option value="code">Code Examples</option>
@@ -84,7 +168,14 @@ export default function DatasetTab() {
                     </select>
                   </div>
                   <div className="flex gap-2 pt-4">
-                    <Button className="flex-1" data-testid="button-create">Create</Button>
+                    <Button
+                      className="flex-1"
+                      data-testid="button-create"
+                      onClick={() => createDatasetMutation.mutate({ name: newDatasetName, description: newDatasetDescription, type: newDatasetType })}
+                      disabled={createDatasetMutation.isPending || !newDatasetName}
+                    >
+                      {createDatasetMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : 'Create'}
+                    </Button>
                     <Button variant="outline" className="flex-1">Cancel</Button>
                   </div>
                 </div>
@@ -101,8 +192,28 @@ export default function DatasetTab() {
               className="flex-1"
               data-testid="input-search-datasets"
             />
-            <Button variant="outline" data-testid="button-import">
-              <Upload className="h-4 w-4 mr-2" />
+            <input
+              type="file"
+              id="dataset-file-upload"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  uploadDatasetMutation.mutate(e.target.files[0]);
+                }
+              }}
+            />
+            <Button
+              variant="outline"
+              data-testid="button-import"
+              onClick={() => {
+                const fileInput = document.getElementById('dataset-file-upload') as HTMLInputElement;
+                if (fileInput) {
+                  fileInput.click();
+                }
+              }}
+              disabled={uploadDatasetMutation.isPending}
+            >
+              {uploadDatasetMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
               Import
             </Button>
           </div>
@@ -119,43 +230,57 @@ export default function DatasetTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDatasets?.map((dataset) => (
-                  <TableRow key={dataset.id} data-testid={`row-dataset-${dataset.id}`}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{dataset.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {dataset.description}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{dataset.type}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {dataset.size.toLocaleString()} rows
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(dataset.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" data-testid={`button-view-${dataset.id}`}>
-                          View
-                        </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-export-${dataset.id}`}>
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-huggingface-${dataset.id}`}>
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-${dataset.id}`}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                {filteredDatasets?.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      No datasets found. Create one or import from a file.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredDatasets?.map((dataset: Dataset) => (
+                    <TableRow key={dataset.id} data-testid={`row-dataset-${dataset.id}`}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{dataset.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {dataset.description}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{dataset.type}</Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {dataset.size.toLocaleString()} rows
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(dataset.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" data-testid={`button-view-${dataset.id}`}>
+                            View
+                          </Button>
+                          <Button variant="ghost" size="sm" data-testid={`button-export-${dataset.id}`}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" data-testid={`button-huggingface-${dataset.id}`}>
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            data-testid={`button-delete-${dataset.id}`}
+                            onClick={() => deleteDatasetMutation.mutate(dataset.id)}
+                            disabled={deleteDatasetMutation.isPending}
+                          >
+                            {deleteDatasetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

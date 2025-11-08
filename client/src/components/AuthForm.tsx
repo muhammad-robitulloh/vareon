@@ -1,8 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Button, Input, Card, CardContent, CardHeader, CardTitle, CardDescription, Label } from '@/components/ui';
 import { Mail, User, Lock, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -69,7 +66,7 @@ export default function AuthForm() {
         description: "Please check your email to verify your account.",
         variant: "success",
       });
-      setLocation(`/verify-email?email=${data.email}`); // Redirect to verify-email page with email
+      setLocation("/waiting-for-verification"); // Redirect to waiting for verification page
     },
     onError: (error: any) => {
       toast({

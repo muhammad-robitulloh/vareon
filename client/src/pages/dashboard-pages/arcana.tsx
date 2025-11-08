@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useSearch, useLocation } from 'wouter';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger, Badge } from '@/components/ui';
 import { MessageSquare, Terminal } from 'lucide-react';
-import ChatInterfaceTab from '@/components/dashboard/arcana/chat-interface-tab';
-import TerminalTab from '@/components/dashboard/arcana/terminal-tab';
+import {
+  ChatInterfaceTab,
+  TerminalTab,
+  ContextMemoryPanel,
+} from '@/components/dashboard/arcana';
 
 export default function Arcana() {
   const search = useSearch();
@@ -56,6 +58,14 @@ export default function Arcana() {
                 <Terminal className="h-4 w-4" />
                 Terminal
               </TabsTrigger>
+              <TabsTrigger
+                value="memory"
+                className="gap-2 data-[state=active]:bg-background"
+                data-testid="tab-memory"
+              >
+                <MessageSquare className="h-4 w-4" /> {/* Reusing MessageSquare for now, can be changed later */}
+                Context Memory
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -65,6 +75,9 @@ export default function Arcana() {
             </TabsContent>
             <TabsContent value="terminal" className="h-full m-0">
               <TerminalTab />
+            </TabsContent>
+            <TabsContent value="memory" className="h-full m-0">
+              <ContextMemoryPanel />
             </TabsContent>
           </div>
         </Tabs>

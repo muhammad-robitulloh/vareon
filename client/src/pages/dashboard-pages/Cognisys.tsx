@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useSearch, useLocation } from 'wouter';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Tabs, TabsContent, TabsList, TabsTrigger, Badge } from '@/components/ui';
 import { Network, Settings, GitBranch, Terminal } from 'lucide-react';
-import ModelMapTab from '@/components/dashboard/cognisys/model-map-tab';
-import RoutingRulesTab from '@/components/dashboard/cognisys/routing-rules-tab';
-import ProviderSettingsTab from '@/components/dashboard/cognisys/provider-settings-tab';
-import TestConsoleTab from '@/components/dashboard/cognisys/test-console-tab';
+import {
+  ModelMapTab,
+  RoutingRulesTab,
+  ProviderSettingsTab,
+  TestConsoleTab,
+} from '@/components/dashboard/cognisys';
 
 export default function Cognisys() {
   const search = useSearch();

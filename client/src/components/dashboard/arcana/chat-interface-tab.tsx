@@ -1,18 +1,117 @@
 import { useState, useRef, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Send, Paperclip, ChevronDown, Sparkles, Save, Play } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Badge, ScrollArea, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui';
+import { Send, Paperclip, ChevronDown, Sparkles, Save, Play, Activity } from 'lucide-react';
 import { mockChatMessages } from '@/lib/dashboard/mockApi';
+import ContextMemoryPanel from './context-memory-panel';
 
 export default function ChatInterfaceTab() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState(mockChatMessages);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async (messageContent: string) => {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: messageContent }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get reader for streaming response');
+      }
+
+      let assistantResponse = '';
+      let assistantReasoning = '';
+      let isReasoning = false;
+
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        // Assuming the backend sends messages in a specific format, e.g.,
+        // { "type": "content", "data": "..." }
+        // { "type": "reasoning", "data": "..." }
+        // { "type": "end" }
+        try {
+          const parsedChunk = JSON.parse(chunk);
+          if (parsedChunk.type === 'content') {
+            assistantResponse += parsedChunk.data;
+          } else if (parsedChunk.type === 'reasoning') {
+            isReasoning = true;
+            assistantReasoning += parsedChunk.data;
+          }
+        } catch (e) {
+          // If not JSON, treat as raw content stream
+          if (!isReasoning) {
+            assistantResponse += chunk;
+          } else {
+            assistantReasoning += chunk;
+          }
+        }
+
+        setMessages((prevMessages) => {
+          const lastMessage = prevMessages[prevMessages.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            return prevMessages.map((msg, index) =>
+              index === prevMessages.length - 1
+                ? {
+                    ...msg,
+                    content: assistantResponse,
+                    reasoning: assistantReasoning,
+                  }
+                : msg
+            );
+          } else {
+            return [
+              ...prevMessages,
+              {
+                id: Date.now().toString(),
+                role: 'assistant',
+                content: assistantResponse,
+                reasoning: assistantReasoning,
+                createdAt: new Date(),
+              },
+            ];
+          }
+        });
+      }
+      return { content: assistantResponse, reasoning: assistantReasoning };
+    },
+    onMutate: (messageContent: string) => {
+      const userMessage = {
+        id: Date.now().toString(),
+        role: 'user' as const,
+        content: messageContent,
+        createdAt: new Date(),
+      };
+      setMessages((prevMessages) => [...prevMessages, userMessage]);
+      setInput('');
+    },
+    onError: (error) => {
+      console.error('Chat message error:', error);
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          id: Date.now().toString(),
+          role: 'assistant' as const,
+          content: `Error: ${error.message}`,
+          createdAt: new Date(),
+        },
+      ]);
+    },
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -24,24 +123,7 @@ export default function ChatInterfaceTab() {
 
   const handleSend = () => {
     if (!input.trim()) return;
-
-    const userMessage = {
-      id: Date.now().toString(),
-      role: 'user' as const,
-      content: input,
-      createdAt: new Date(),
-    };
-
-    const assistantMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant' as const,
-      content: 'This is a simulated AI response. In production, this would be generated by the LLM with streaming support and proper reasoning.',
-      reasoning: 'To provide a helpful response, I should acknowledge the user\'s input and provide relevant information based on the context.',
-      createdAt: new Date(),
-    };
-
-    setMessages([...messages, userMessage, assistantMessage]);
-    setInput('');
+    sendMessageMutation.mutate(input);
   };
 
   return (
@@ -114,56 +196,15 @@ export default function ChatInterfaceTab() {
                 className="flex-1"
                 data-testid="input-chat-message"
               />
-              <Button onClick={handleSend} data-testid="button-send-message">
-                <Send className="h-4 w-4" />
+              <Button onClick={handleSend} disabled={sendMessageMutation.isPending} data-testid="button-send-message">
+                {sendMessageMutation.isPending ? <Activity className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="w-80 border-l bg-card/30">
-        <div className="p-4 border-b">
-          <h3 className="font-medium text-sm">Context & Memory</h3>
-        </div>
-        <ScrollArea className="h-[calc(100%-60px)] p-4">
-          <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Pinned Datasets</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm p-2 bg-muted/30 rounded">
-                    <span>Code Examples</span>
-                    <Badge variant="outline" className="text-xs">8.9k</Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-sm p-2 bg-muted/30 rounded">
-                    <span>Customer Support QA</span>
-                    <Badge variant="outline" className="text-xs">15.4k</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full justify-start gap-2" data-testid="button-run-myntrix">
-                  <Play className="h-4 w-4" />
-                  Run in Myntrix
-                </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start gap-2" data-testid="button-save-neosyntis">
-                  <Save className="h-4 w-4" />
-                  Save to Neosyntis
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </ScrollArea>
-      </div>
+      <ContextMemoryPanel />
     </div>
   );
 }

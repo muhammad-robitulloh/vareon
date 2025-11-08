@@ -1,14 +1,11 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Cpu, Upload, Activity, Box } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Badge, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
+import { Cpu, Upload, Activity, Box, Loader2 } from 'lucide-react';
 import { StatusIndicator } from '../status-indicator';
-import { mockDevices } from '@/lib/dashboard/mockApi';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/dashboard/use-toast';
 
 function Cube() {
   return (
@@ -19,13 +16,140 @@ function Cube() {
   );
 }
 
+import { Device } from './types';
+
 export default function DeviceControlTab() {
   const [activeDevice, setActiveDevice] = useState('1');
 
-  const { data: devices } = useQuery({
+  const { data: devices } = useQuery<Device[]>({
     queryKey: ['/api/devices'],
-    initialData: mockDevices,
+    queryFn: async () => {
+      const response = await fetch('/api/devices');
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    },
   });
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const connectDeviceMutation = useMutation({
+    mutationFn: async (deviceId: string) => {
+      const response = await fetch(`/api/devices/${deviceId}/connect`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to connect to device');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Device Connected', description: 'Successfully connected to device.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/devices'] });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to connect: ${error.message}`, variant: 'destructive' });
+    },
+  });
+
+  const disconnectDeviceMutation = useMutation({
+    mutationFn: async (deviceId: string) => {
+      const response = await fetch(`/api/devices/${deviceId}/disconnect`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to disconnect from device');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Device Disconnected', description: 'Successfully disconnected from device.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/devices'] });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to disconnect: ${error.message}`, variant: 'destructive' });
+    },
+  });
+
+  const sendCommandMutation = useMutation({
+    mutationFn: async ({ deviceId, command }: { deviceId: string; command: string }) => {
+      const response = await fetch(`/api/devices/${deviceId}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to send command');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Command Sent', description: 'Command successfully sent to device.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to send command: ${error.message}`, variant: 'destructive' });
+    },
+  });
+
+  const uploadFileMutation = useMutation({
+    mutationFn: async ({ deviceId, file }: { deviceId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`/api/devices/${deviceId}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error('Failed to upload file');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'File Uploaded', description: 'File successfully uploaded to device.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to upload file: ${error.message}`, variant: 'destructive' });
+    },
+  });
+
+  const [telemetryData, setTelemetryData] = useState<any>({});
+  const [telemetryLogs, setTelemetryLogs] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!activeDevice) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const accessToken = localStorage.getItem("access_token");
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry/${activeDevice}?token=${accessToken}`);
+
+    ws.onopen = () => {
+      console.log(`Telemetry WebSocket connected for device ${activeDevice}`);
+      setTelemetryLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Connected to telemetry stream.`]);
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'telemetry') {
+        setTelemetryData(data.payload);
+      } else if (data.type === 'log') {
+        setTelemetryLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${data.payload}`]);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log(`Telemetry WebSocket disconnected for device ${activeDevice}`);
+      setTelemetryLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Disconnected from telemetry stream.`]);
+    };
+
+    ws.onerror = (error) => {
+      console.error(`Telemetry WebSocket error for device ${activeDevice}:`, error);
+      setTelemetryLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Telemetry stream error.`]);
+    };
+
+    return () => {
+      ws.close();
+      setTelemetryData({});
+      setTelemetryLogs([]);
+    };
+  }, [activeDevice]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -41,7 +165,7 @@ export default function DeviceControlTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {devices?.map((device) => (
+            {devices?.map((device: Device) => (
               <Card
                 key={device.id}
                 className={`cursor-pointer hover-elevate ${activeDevice === device.id ? 'border-primary' : ''}`}
@@ -60,6 +184,33 @@ export default function DeviceControlTab() {
                     )}
                   </div>
                 </CardHeader>
+                <CardContent className="flex justify-end gap-2">
+                  {device.status === 'connected' ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        disconnectDeviceMutation.mutate(device.id);
+                      }}
+                      disabled={disconnectDeviceMutation.isPending}
+                    >
+                      {disconnectDeviceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Disconnect'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        connectDeviceMutation.mutate(device.id);
+                      }}
+                      disabled={connectDeviceMutation.isPending}
+                    >
+                      {connectDeviceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect'}
+                    </Button>
+                  )}
+                </CardContent>
                 {device.lastSeen && (
                   <CardContent>
                     <div className="text-xs text-muted-foreground">
@@ -131,27 +282,25 @@ export default function DeviceControlTab() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-4 border rounded-lg">
                   <div className="text-sm text-muted-foreground">Temperature</div>
-                  <div className="text-2xl font-bold mt-1">42°C</div>
+                  <div className="text-2xl font-bold mt-1">{telemetryData.temperature ? `${telemetryData.temperature}°C` : 'N/A'}</div>
                 </div>
                 <div className="p-4 border rounded-lg">
                   <div className="text-sm text-muted-foreground">Speed</div>
-                  <div className="text-2xl font-bold mt-1">1200 RPM</div>
+                  <div className="text-2xl font-bold mt-1">{telemetryData.speed ? `${telemetryData.speed} RPM` : 'N/A'}</div>
                 </div>
                 <div className="p-4 border rounded-lg">
                   <div className="text-sm text-muted-foreground">Position X</div>
-                  <div className="text-2xl font-bold mt-1 font-mono">125.4</div>
+                  <div className="text-2xl font-bold mt-1 font-mono">{telemetryData.positionX !== undefined ? telemetryData.positionX : 'N/A'}</div>
                 </div>
                 <div className="p-4 border rounded-lg">
                   <div className="text-sm text-muted-foreground">Position Y</div>
-                  <div className="text-2xl font-bold mt-1 font-mono">87.2</div>
+                  <div className="text-2xl font-bold mt-1 font-mono">{telemetryData.positionY !== undefined ? telemetryData.positionY : 'N/A'}</div>
                 </div>
               </div>
-              <div className="mt-4 p-4 bg-background/50 rounded-lg font-mono text-xs space-y-1">
-                <div className="text-green-500">[12:34:56] Device connected</div>
-                <div className="text-blue-500">[12:35:01] Homing sequence started</div>
-                <div className="text-blue-500">[12:35:04] Homing complete</div>
-                <div className="text-yellow-500">[12:35:10] Temperature reading: 42°C</div>
-                <div className="text-green-500">[12:35:15] Ready for operation</div>
+              <div className="mt-4 p-4 bg-background/50 rounded-lg font-mono text-xs space-y-1 h-48 overflow-y-auto">
+                {telemetryLogs.map((log, index) => (
+                  <div key={index}>{log}</div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -166,17 +315,37 @@ export default function DeviceControlTab() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-8 text-center hover-elevate cursor-pointer">
+              <input
+                type="file"
+                id="file-upload"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0] && activeDevice) {
+                    uploadFileMutation.mutate({ deviceId: activeDevice, file: e.target.files[0] });
+                  }
+                }}
+              />
+              <label htmlFor="file-upload" className="border-2 border-dashed rounded-lg p-8 text-center hover-elevate cursor-pointer block">
                 <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">
-                  Drop G-code or firmware file here
+                  Drop G-code or firmware file here, or click to select
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Supports .gcode, .nc, .hex, .bin formats
                 </p>
-              </div>
-              <Button className="w-full" data-testid="button-upload-to-device">
-                <Upload className="h-4 w-4 mr-2" />
+              </label>
+              <Button
+                className="w-full"
+                data-testid="button-upload-to-device"
+                onClick={() => {
+                  const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+                  if (fileInput) {
+                    fileInput.click();
+                  }
+                }}
+                disabled={!activeDevice || uploadFileMutation.isPending}
+              >
+                {uploadFileMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                 Upload to Device
               </Button>
             </CardContent>

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
 import { BarChart3, Activity } from 'lucide-react';
 import { mockTelemetryData, mockJobs } from '@/lib/dashboard/mockApi';
 import {

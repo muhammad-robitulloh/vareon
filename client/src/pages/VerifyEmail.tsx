@@ -1,106 +1,133 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Mail, Lock, Loader2 } from "lucide-react";
+import { Button, Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui';
+import { Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
-const API_BASE_URL = ""; // Define your API base URL
+const API_BASE_URL = ""; // Assuming API is served from the same origin
 
 export default function VerifyEmail() {
-  const [location] = useLocation();
-  const [email, setEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
+  const [location, setLocation] = useLocation();
+  const [emailFromUrl, setEmailFromUrl] = useState<string | null>(null);
+  const [tokenFromUrl, setTokenFromUrl] = useState<string | null>(null);
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.split("?")[1]);
-    const emailFromUrl = params.get("email");
-    if (emailFromUrl) {
-      setEmail(emailFromUrl);
-    }
-  }, [location]);
 
   const verifyEmailMutation = useMutation({
-    mutationFn: async (verificationData: { email: string; otp_code: string }) => {
+    mutationFn: async ({ email, token }: { email: string; token: string }) => {
       const response = await fetch(`${API_BASE_URL}/api/verify-email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(verificationData),
+        body: JSON.stringify({ email, token }),
       });
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || "Email verification failed");
+        throw new Error(errorData.detail || "Verification failed.");
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
-        title: "Email Verified",
-        description: "Your email has been successfully verified. You can now log in.",
-        variant: "success",
+        title: "Success!",
+        description: data.message || "Email verified successfully.",
+        variant: "default",
       });
-      setLocation("/auth"); // Redirect to login page
+      // No immediate redirect, button will change to 'Back to Login'
     },
     onError: (error: any) => {
       toast({
         title: "Verification Failed",
-        description: error.message || "An unexpected error occurred.",
+        description: error.message || "An error occurred during verification.",
         variant: "destructive",
       });
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    verifyEmailMutation.mutate({ email, otp_code: otpCode });
+  useEffect(() => {
+    const queryString = window.location.search.substring(1); // Get query string without '?'
+    const params = new URLSearchParams(queryString || "");
+    const email = params.get("email");
+    const token = params.get("token");
+
+    setEmailFromUrl(email);
+    setTokenFromUrl(token);
+
+    if (!email || !token) {
+      toast({
+        title: "Invalid Link",
+        description: "The verification link is missing required parameters.",
+        variant: "destructive",
+      });
+    }
+  }, [location, toast]);
+
+  const handleBackToLogin = () => {
+    setLocation("/auth");
   };
 
-  const isLoading = verifyEmailMutation.isPending;
+  const handleVerifyEmail = () => {
+    if (emailFromUrl && tokenFromUrl) {
+      verifyEmailMutation.mutate({ email: emailFromUrl, token: tokenFromUrl });
+    } else {
+      toast({
+        title: "Error",
+        description: "Cannot verify: email or token is missing.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const renderButton = () => {
+    if (verifyEmailMutation.isPending) {
+      return (
+        <Button className="w-full" disabled>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Verifying...
+        </Button>
+      );
+    } else if (verifyEmailMutation.isSuccess) {
+      return (
+        <Button onClick={handleBackToLogin} className="w-full">
+          Back to Login
+        </Button>
+      );
+    } else if (emailFromUrl && tokenFromUrl) {
+      return (
+        <Button onClick={handleVerifyEmail} className="w-full">
+          Verify Email
+        </Button>
+      );
+    } else {
+      return (
+        <Button onClick={handleBackToLogin} className="w-full">
+          Back to Login
+        </Button>
+      );
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center py-12">
       <Card className="w-full max-w-md mx-auto bg-card/80 backdrop-blur-sm border-primary/20 shadow-lg">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">Verify Your Email</CardTitle>
-          <CardDescription>Enter the OTP sent to your email address</CardDescription>
+          <CardTitle className="text-3xl font-bold">
+            Email Verification
+          </CardTitle>
+          <CardDescription>
+            {verifyEmailMutation.isPending
+              ? "Verifying your email address..."
+              : verifyEmailMutation.isSuccess
+              ? "Your email has been successfully verified!"
+              : verifyEmailMutation.isError
+              ? "There was an issue verifying your email. Please try again or request a new link."
+              : "Click the button below to verify your email address."}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="pl-10"
-              />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                id="otp"
-                type="text"
-                placeholder="OTP Code"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                required
-                className="pl-10"
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin" /> : "Verify Email"}
-            </Button>
-          </form>
+        <CardContent className="flex flex-col items-center space-y-4">
+          {renderButton()}
         </CardContent>
       </Card>
     </div>

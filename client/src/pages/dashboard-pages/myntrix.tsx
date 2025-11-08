@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useSearch, useLocation } from 'wouter';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger, Badge } from '@/components/ui';
 import { Bot, Calendar, Cpu, BarChart3 } from 'lucide-react';
-import AgentManagerTab from '@/components/dashboard/myntrix/agent-manager-tab';
-import TaskSchedulerTab from '@/components/dashboard/myntrix/task-scheduler-tab';
-import DeviceControlTab from '@/components/dashboard/myntrix/device-control-tab';
-import ResourceMonitorTab from '@/components/dashboard/myntrix/resource-monitor-tab';
+import {
+  AgentManagerTab,
+  TaskSchedulerTab,
+  DeviceControlTab,
+  ResourceMonitorTab,
+  ThreeDVisualizationTab,
+} from '@/components/dashboard/myntrix';
 
 const tabs = [
   { value: 'agents', label: 'Agent Manager', icon: Bot },
   { value: 'scheduler', label: 'Task Scheduler', icon: Calendar },
   { value: 'devices', label: 'Device Control', icon: Cpu },
   { value: 'monitor', label: 'Resource Monitor', icon: BarChart3 },
+  { value: '3d-viz', label: '3D Visualization', icon: BarChart3 }, // Reusing BarChart3 for now
 ];
 
 export default function Myntrix() {
@@ -75,6 +78,9 @@ export default function Myntrix() {
             </TabsContent>
             <TabsContent value="monitor" className="h-full m-0 p-6">
               <ResourceMonitorTab />
+            </TabsContent>
+            <TabsContent value="3d-viz" className="h-full m-0 p-6">
+              <ThreeDVisualizationTab />
             </TabsContent>
           </div>
         </Tabs>

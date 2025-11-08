@@ -1,48 +1,115 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Bot, Play, Pause, RotateCcw, Trash2, Plus } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Badge, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui';
+import { Bot, Play, Pause, RotateCcw, Trash2, Plus, Loader2 } from 'lucide-react';
 import { StatusIndicator } from '../status-indicator';
 import { mockAgents } from '@/lib/dashboard/mockApi';
 import { useToast } from '@/hooks/dashboard/use-toast';
 import { queryClient } from '@/lib/dashboard/queryClient';
 
+import { Agent } from './types';
+
 export default function AgentManagerTab() {
   const { toast } = useToast();
 
-  const { data: agents } = useQuery({
+  const { data: agents } = useQuery<Agent[]>({
     queryKey: ['/api/agents'],
-    initialData: mockAgents,
+    queryFn: async () => {
+      const response = await fetch('/api/agents');
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    },
   });
 
   const startAgent = useMutation({
-    mutationFn: async () => {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      return { success: true };
+    mutationFn: async (agentId: string) => {
+      const response = await fetch(`/api/agents/${agentId}/start`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to start agent');
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({ title: 'Agent started', description: 'Agent is now running' });
       queryClient.invalidateQueries({ queryKey: ['/api/agents'] });
     },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to start agent: ${error.message}`, variant: 'destructive' });
+    },
   });
 
   const stopAgent = useMutation({
-    mutationFn: async () => {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      return { success: true };
+    mutationFn: async (agentId: string) => {
+      const response = await fetch(`/api/agents/${agentId}/stop`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to stop agent');
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({ title: 'Agent stopped' });
       queryClient.invalidateQueries({ queryKey: ['/api/agents'] });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to stop agent: ${error.message}`, variant: 'destructive' });
+    },
+  });
+
+  const createAgent = useMutation({
+    mutationFn: async (newAgentData: { name: string; type: string }) => {
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newAgentData),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to create agent');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Agent created', description: 'New agent has been successfully created.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/agents'] });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to create agent: ${error.message}`, variant: 'destructive' });
+    },
+  });
+
+  const restartAgent = useMutation({
+    mutationFn: async (agentId: string) => {
+      const response = await fetch(`/api/agents/${agentId}/restart`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to restart agent');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Agent restarted', description: 'Agent has been successfully restarted.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/agents'] });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to restart agent: ${error.message}`, variant: 'destructive' });
+    },
+  });
+
+  const deleteAgent = useMutation({
+    mutationFn: async (agentId: string) => {
+      const response = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error('Failed to delete agent');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Agent deleted', description: 'Agent has been successfully deleted.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/agents'] });
+    },
+    onError: (error) => {
+      toast({ title: 'Error', description: `Failed to delete agent: ${error.message}`, variant: 'destructive' });
     },
   });
 
@@ -60,8 +127,8 @@ export default function AgentManagerTab() {
                 Manage and monitor AI agents for task execution
               </CardDescription>
             </div>
-            <Button data-testid="button-create-agent">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button onClick={() => createAgent.mutate({ name: 'New Agent', type: 'Generic' })} data-testid="button-create-agent" disabled={createAgent.isPending}>
+              {createAgent.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
               Create Agent
             </Button>
           </div>
@@ -82,7 +149,7 @@ export default function AgentManagerTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {agents?.map((agent) => (
+              {agents?.map((agent: Agent) => (
                 <TableRow key={agent.id} data-testid={`row-agent-${agent.id}`}>
                   <TableCell className="font-medium">{agent.name}</TableCell>
                   <TableCell>
@@ -135,11 +202,23 @@ export default function AgentManagerTab() {
                           <Play className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" data-testid={`button-restart-${agent.id}`}>
-                        <RotateCcw className="h-4 w-4" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => restartAgent.mutate(agent.id)}
+                        data-testid={`button-restart-${agent.id}`}
+                        disabled={restartAgent.isPending}
+                      >
+                        {restartAgent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                       </Button>
-                      <Button variant="ghost" size="sm" data-testid={`button-delete-${agent.id}`}>
-                        <Trash2 className="h-4 w-4" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteAgent.mutate(agent.id)}
+                        data-testid={`button-delete-${agent.id}`}
+                        disabled={deleteAgent.isPending}
+                      >
+                        {deleteAgent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
                     </div>
                   </TableCell>
@@ -165,7 +244,7 @@ export default function AgentManagerTab() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">
-              {agents?.filter(a => a.status === 'running').length}
+              {agents?.filter((a: Agent) => a.status === 'running').length}
             </div>
           </CardContent>
         </Card>
@@ -175,7 +254,7 @@ export default function AgentManagerTab() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {Math.round(agents?.reduce((acc, a) => acc + a.health, 0)! / agents?.length!)}%
+              {Math.round(agents?.reduce((acc: number, a: Agent) => acc + a.health, 0)! / agents?.length!)}%
             </div>
           </CardContent>
         </Card>

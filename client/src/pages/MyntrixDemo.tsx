@@ -2,7 +2,7 @@ import Navigation from "@/components/Navigation";
 import JobSubmissionForm from "@/components/JobSubmissionForm";
 import Footer from "@/components/Footer";
 import { Cpu, Shield, Zap, Database } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Card } from '@/components/ui';
 
 const features = [
   {

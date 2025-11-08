@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import { Card } from '@/components/ui';
 import { Brain, Code, Terminal, Zap, MessageSquare, FileCode } from "lucide-react";
 
 const capabilities = [

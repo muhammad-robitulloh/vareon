@@ -1,10 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Button, Label, Switch, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui';
 import { Network, Eye, EyeOff } from 'lucide-react';
 import { mockModels } from '@/lib/dashboard/mockApi';
 

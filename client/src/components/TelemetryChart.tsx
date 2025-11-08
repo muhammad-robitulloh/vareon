@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
+import { Card } from '@/components/ui';
 import { Activity } from "lucide-react";
 
 export default function TelemetryChart() {

@@ -4,7 +4,7 @@ import TerminalPanel from "@/components/TerminalPanel";
 import TelemetryChart from "@/components/TelemetryChart";
 import Footer from "@/components/Footer";
 import { FlaskConical } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
 
 export default function Neosyntis() {
   return (

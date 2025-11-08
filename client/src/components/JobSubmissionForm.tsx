@@ -1,8 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
+import { Button, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Card } from '@/components/ui';
 import { Play, CheckCircle, XCircle } from "lucide-react";
 
 export default function JobSubmissionForm() {

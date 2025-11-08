@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Badge } from '@/components/ui';
 import { BarChart3, Cpu, HardDrive, Activity } from 'lucide-react';
 import { mockTelemetryData, mockJobs } from '@/lib/dashboard/mockApi';
 import {

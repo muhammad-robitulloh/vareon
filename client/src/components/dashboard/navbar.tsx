@@ -1,18 +1,7 @@
 import { Search, Bell } from 'lucide-react';
 import { ThemeToggle } from './theme-provider';
 import { useStore } from '@/lib/dashboard/store';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Button, Input, Badge, Avatar, AvatarFallback, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui';
 
 export function Navbar() {
   const { toggleCommandPalette, performanceMode, togglePerformanceMode } = useStore();

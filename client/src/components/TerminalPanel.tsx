@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Terminal as TerminalIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui';
 
 export default function TerminalPanel() {
   const [output, setOutput] = useState([
@@ -62,7 +62,7 @@ export default function TerminalPanel() {
           }
         }
       }, 20); // Typing speed
-    }, 500); // Delay before AI starts typing
+    }, 0); // Delay before AI starts typing
   };
 
   return (

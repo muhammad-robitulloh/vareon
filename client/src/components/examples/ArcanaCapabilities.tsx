@@ -1,5 +1,5 @@
-import NeuroNetCapabilities from '../NeuroNetCapabilities'
+import ArcanaCapabilities from '../ArcanaCapabilities'
 
-export default function NeuroNetCapabilitiesExample() {
-  return <NeuroNetCapabilities />
+export default function ArcanaCapabilitiesExample() {
+  return <ArcanaCapabilities />
 }
