@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import os
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from datetime import datetime
@@ -54,7 +55,10 @@ def start_agent(agent_id: str, current_user: DBUser = Depends(get_current_user),
     if db_agent is None or db_agent.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     
-    # TODO: Implement actual logic to start the agent process
+    # Simulate actual logic to start the agent process
+    print(f"Starting agent {db_agent.name} (ID: {agent_id})...")
+    # In a real scenario, this would involve spawning a new process,
+    # making an API call to a container orchestrator, etc.
     db_agent.status = "running"
     db_agent.last_run = datetime.utcnow()
     db.commit()
@@ -69,7 +73,10 @@ def stop_agent(agent_id: str, current_user: DBUser = Depends(get_current_user), 
     if db_agent is None or db_agent.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     
-    # TODO: Implement actual logic to stop the agent process
+    # Simulate actual logic to stop the agent process
+    print(f"Stopping agent {db_agent.name} (ID: {agent_id})...")
+    # In a real scenario, this would involve sending a termination signal,
+    # making an API call to a container orchestrator, etc.
     db_agent.status = "stopped"
     db.commit()
     db.refresh(db_agent)
@@ -83,7 +90,10 @@ def restart_agent(agent_id: str, current_user: DBUser = Depends(get_current_user
     if db_agent is None or db_agent.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     
-    # TODO: Implement actual logic to restart the agent process
+    # Simulate actual logic to restart the agent process
+    print(f"Restarting agent {db_agent.name} (ID: {agent_id})...")
+    # In a real scenario, this would involve sending a restart command,
+    # or stopping and then starting the process/container.
     db_agent.status = "restarting" # Or directly "running" after restart logic
     db_agent.last_run = datetime.utcnow()
     db.commit()
@@ -153,7 +163,9 @@ def connect_device(device_id: str, current_user: DBUser = Depends(get_current_us
     if db_device is None or db_device.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
     
-    # TODO: Implement actual logic to connect to the device
+    # Simulate actual logic to connect to the device
+    print(f"Connecting to device {db_device.name} (ID: {device_id})...")
+    # In a real scenario, this would involve establishing a physical or network connection
     db_device.status = "connected"
     db_device.last_seen = datetime.utcnow()
     db.commit()
@@ -168,7 +180,9 @@ def disconnect_device(device_id: str, current_user: DBUser = Depends(get_current
     if db_device is None or db_device.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
     
-    # TODO: Implement actual logic to disconnect from the device
+    # Simulate actual logic to disconnect from the device
+    print(f"Disconnecting from device {db_device.name} (ID: {device_id})...")
+    # In a real scenario, this would involve closing the physical or network connection
     db_device.status = "disconnected"
     db.commit()
     db.refresh(db_device)
@@ -197,24 +211,73 @@ async def upload_file_to_device(device_id: str, file: UploadFile = File(...), cu
     print(f"Uploading file '{file.filename}' ({len(file_content)} bytes) to device {db_device.name}")
     return {"message": f"File '{file.filename}' uploaded to device {db_device.name} (placeholder)."}
 
-# TODO: Implement WebSocket endpoint for telemetry: ws/myntrix/telemetry/{deviceId}
+# WebSocket endpoint for telemetry
+@router.websocket("/ws/myntrix/telemetry/{device_id}")
+async def websocket_telemetry_endpoint(websocket: WebSocket, device_id: str, current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(f"Received telemetry from device {device_id}: {data}")
+            await websocket.send_text(f"Message received from device {device_id}: {data}")
+    except WebSocketDisconnect:
+        print(f"Device {device_id} disconnected from telemetry WebSocket.")
+    except Exception as e:
+        print(f"Error in telemetry WebSocket for device {device_id}: {e}")
+    finally:
+        await websocket.close()
 
 ### Resource Monitoring ###
 
 @router.get("/system-metrics", response_model=Dict[str, Any])
 async def get_system_metrics(current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    # TODO: Add authentication/authorization
-    # Implement server-side logic to collect real-time system metrics (e.g., psutil in Python)
-    cpu_percent = psutil.cpu_percent(interval=1)
-    memory_info = psutil.virtual_memory()
-    
-    return {
-        "cpu_percent": cpu_percent,
-        "memory_percent": memory_info.percent,
-        "memory_total": memory_info.total,
-        "memory_available": memory_info.available,
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    # Check for mock mode environment variable
+    if os.getenv("VAREON_MOCK_SYSTEM_METRICS", "false").lower() == "true":
+        # Fallback to mock data
+        return {
+            "cpu_percent": 10.0,
+            "memory_percent": 30.0,
+            "memory_total": 8 * 1024 * 1024 * 1024, # 8 GB
+            "memory_available": 5 * 1024 * 1024 * 1024, # 5 GB
+            "timestamp": datetime.utcnow().isoformat(),
+            "mocked": True
+        }
+
+    try:
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory_info = psutil.virtual_memory()
+        
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_info.percent,
+            "memory_total": memory_info.total,
+            "memory_available": memory_info.available,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except PermissionError:
+        # If PermissionError occurs, log it and fall back to mock data
+        print("WARNING: Permission denied to access system metrics. Falling back to mock data.")
+        return {
+            "cpu_percent": 10.0,
+            "memory_percent": 30.0,
+            "memory_total": 8 * 1024 * 1024 * 1024, # 8 GB
+            "memory_available": 5 * 1024 * 1024 * 1024, # 5 GB
+            "timestamp": datetime.utcnow().isoformat(),
+            "mocked": True,
+            "reason": "PermissionError accessing system metrics"
+        }
+    except Exception as e:
+        # Catch any other unexpected errors and fall back to mock data
+        print(f"ERROR: Failed to get system metrics: {e}. Falling back to mock data.")
+        return {
+            "cpu_percent": 10.0,
+            "memory_percent": 30.0,
+            "memory_total": 8 * 1024 * 1024 * 1024, # 8 GB
+            "memory_available": 5 * 1024 * 1024 * 1024, # 5 GB
+            "timestamp": datetime.utcnow().isoformat(),
+            "mocked": True,
+            "reason": f"Unexpected error: {e}"
+        }
 
 @router.get("/jobs/", response_model=List[schemas.JobResponse])
 def read_jobs(skip: int = 0, limit: int = 100, current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -283,10 +346,26 @@ def run_scheduled_task(task_id: str, current_user: DBUser = Depends(get_current_
     if db_task is None or db_task.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheduled Task not found")
     
-    # TODO: Implement actual logic to run the task
-    task_run = schemas.TaskRunCreate(task_id=task_id, status="running", logs="Task manually triggered.")
-    db_task_run = crud.create_task_run(db, task_run)
-    if db_task_run.logs: # Assuming logs might contain JSON, though not explicitly stated in schema
+    # For now, simulate task execution and update status
+    print(f"Executing scheduled task {db_task.name} (ID: {task_id})...")
+    
+    # Create a new task run entry
+    task_run_create = schemas.TaskRunCreate(
+        task_id=task_id, 
+        status="running", 
+        logs=f"Task '{db_task.name}' manually triggered at {datetime.utcnow().isoformat()}."
+    )
+    db_task_run = crud.create_task_run(db, task_run_create)
+
+    # Simulate work and update status to completed
+    db_task_run.status = "completed"
+    db_task_run.end_time = datetime.utcnow()
+    db_task_run.logs += f"\nTask '{db_task.name}' completed at {db_task_run.end_time.isoformat()}."
+    db.add(db_task_run)
+    db.commit()
+    db.refresh(db_task_run)
+
+    if db_task_run.logs:
         try:
             db_task_run.logs = json.loads(db_task_run.logs)
         except json.JSONDecodeError:

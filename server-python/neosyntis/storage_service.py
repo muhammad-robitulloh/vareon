@@ -18,14 +18,20 @@ async def save_dataset_file(file: UploadFile, dataset_id: str) -> str:
     file_name = f"{dataset_id}.{file_extension}"
     file_path = os.path.join(DATASET_STORAGE_DIR, file_name)
 
-    with open(file_path, "wb") as buffer:
-        while True:
-            chunk = await file.read(1024 * 1024)  # Read in 1MB chunks
-            if not chunk:
-                break
-            buffer.write(chunk)
-    
-    return file_path
+    try:
+        with open(file_path, "wb") as buffer:
+            while True:
+                chunk = await file.read(1024 * 1024)  # Read in 1MB chunks
+                if not chunk:
+                    break
+                buffer.write(chunk)
+        return file_path
+    except IOError as e:
+        print(f"Error saving file {file_path}: {e}")
+        raise Exception(f"Failed to save dataset file: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred while saving file {file_path}: {e}")
+        raise Exception(f"An unexpected error occurred: {e}")
 
 def get_dataset_file_path(dataset_id: str, file_extension: str) -> str:
     """

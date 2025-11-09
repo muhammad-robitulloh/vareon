@@ -1,3 +1,4 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
@@ -50,9 +51,37 @@ async def test_llm_provider_connection(provider_id: str, current_user: DBUser = 
 
     api_key = crud.decrypt_api_key(db_provider.api_key_encrypted)
     
-    print(f"Testing connection for provider {db_provider.name} with base URL: {db_provider.base_url} and API key: {api_key[:5]}...")
+    print(f"Attempting to test connection for provider {db_provider.name} at {db_provider.base_url}...")
 
-    return {"message": f"Connection to provider {db_provider.name} tested successfully (placeholder).", "status": "success"}
+    try:
+        # This is a generic test. Real LLM providers might need specific endpoints or headers.
+        # For now, we just try to reach the base_url.
+        async with httpx.AsyncClient() as client:
+            response = await client.get(db_provider.base_url, timeout=5)
+            response.raise_for_status() # Raise an exception for 4xx or 5xx responses
+
+        return {
+            "message": f"Connection to provider {db_provider.name} successful.",
+            "status": "success"
+        }
+    except httpx.RequestError as e:
+        print(f"Connection test failed for {db_provider.name}: {e}")
+        return {
+            "message": f"Connection to provider {db_provider.name} failed: {e}",
+            "status": "failure"
+        }
+    except httpx.HTTPStatusError as e:
+        print(f"Connection test failed for {db_provider.name} with HTTP error: {e.response.status_code} - {e.response.text}")
+        return {
+            "message": f"Connection to provider {db_provider.name} failed with HTTP error: {e.response.status_code} - {e.response.text}",
+            "status": "failure"
+        }
+    except Exception as e:
+        print(f"An unexpected error occurred during connection test for {db_provider.name}: {e}")
+        return {
+            "message": f"An unexpected error occurred during connection test for {db_provider.name}: {e}",
+            "status": "failure"
+        }
 
 ### LLM Model Mapping ###
 

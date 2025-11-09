@@ -10,31 +10,63 @@ from .crud import decrypt_api_key # Import the decrypt function
 
 # Placeholder for LLM API call function
 async def call_llm_api(provider: LLMProvider, model_name: str, prompt: str, api_key: str) -> Dict[str, Any]:
-    # This is a simplified example for OpenRouter.
-    # Real implementation would need to handle different LLM providers and their specific API formats.
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "http://localhost:3000", # Replace with your actual app URL
-        "X-Title": "Vareon", # Replace with your actual app name
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": model_name,
-        "messages": [{"role": "user", "content": prompt}]
-    }
+    headers = {}
+    payload = {}
+    api_endpoint = ""
     
+    # Determine provider type and configure request accordingly
+    if "openrouter" in provider.base_url.lower(): # Assuming OpenRouter for now
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "http://localhost:3000", # Replace with your actual app URL
+            "X-Title": "Vareon", # Replace with your actual app name
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        api_endpoint = f"{provider.base_url}/chat/completions"
+    elif "generativelanguage.googleapis.com" in provider.base_url.lower(): # Example for Google Gemini
+        headers = {
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}]
+        }
+        # Assuming model_name is like "gemini-pro" and base_url is like "https://generativelanguage.googleapis.com/v1beta"
+        api_endpoint = f"{provider.base_url}/models/{model_name}:generateContent?key={api_key}"
+    else:
+        raise HTTPException(status_code=500, detail=f"Unsupported LLM provider: {provider.name}")
+
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{provider.base_url}/chat/completions", headers=headers, json=payload, timeout=60.0)
+            if "generativelanguage.googleapis.com" in provider.base_url.lower():
+                response = await client.post(api_endpoint, headers=headers, json=payload, timeout=60.0)
+            else: # Default to JSON payload for other providers like OpenRouter
+                response = await client.post(api_endpoint, headers=headers, json=payload, timeout=60.0)
+            
             response.raise_for_status()
             response_data = response.json()
             
-            # Extract content and token usage
-            content = response_data['choices'][0]['message']['content']
-            prompt_tokens = response_data['usage']['prompt_tokens']
-            completion_tokens = response_data['usage']['completion_tokens']
-            total_tokens = response_data['usage']['total_tokens']
+            content = ""
+            prompt_tokens = 0
+            completion_tokens = 0
+            total_tokens = 0
 
+            if "openrouter" in provider.base_url.lower():
+                content = response_data['choices'][0]['message']['content']
+                prompt_tokens = response_data['usage']['prompt_tokens']
+                completion_tokens = response_data['usage']['completion_tokens']
+                total_tokens = response_data['usage']['total_tokens']
+            elif "generativelanguage.googleapis.com" in provider.base_url.lower():
+                content = response_data['candidates'][0]['content']['parts'][0]['text']
+                # Google Gemini API response for token usage is different, often not directly in generateContent
+                # For simplicity, we'll mock token usage for now or integrate a separate token counter
+                prompt_tokens = len(prompt.split()) # Placeholder
+                completion_tokens = len(content.split()) # Placeholder
+                total_tokens = prompt_tokens + completion_tokens
+            
             return {
                 "content": content,
                 "prompt_tokens": prompt_tokens,

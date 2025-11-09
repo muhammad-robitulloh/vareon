@@ -499,13 +499,27 @@ async def open_neosyntis_lab():
     if "system_status" in cache: del cache["system_status"]
     return {"message": "Neosyntis Lab opened successfully!"}
 
-@app.post("/api/arcana/start-chat")
-async def start_arcana_chat():
-    logger.info("Quick action: Start Arcana Chat triggered.")
-    # TODO: Implement actual logic for starting Arcana Chat
+@app.post("/api/arcana/start-chat", response_model=MessageResponse)
+async def start_arcana_chat(current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    logger.info(f"Quick action: Start Arcana Chat triggered by user {current_user.id}.")
+    # Implement actual logic for starting Arcana Chat
+    # This could involve:
+    # 1. Creating a new conversation in the database
+    # 2. Initializing LLM parameters for the user/conversation
+    # 3. Preparing a specific context for the chat
+    
+    # For now, we'll simulate creating a new conversation
+    user_id = str(current_user.id)
+    new_conversation = DBConversation(user_id=user_id, title=f"Arcana Chat - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}")
+    db.add(new_conversation)
+    db.commit()
+    db.refresh(new_conversation)
+    
+    logger.info(f"Arcana Chat session started. New conversation ID: {new_conversation.id}")
+    
     if "arcana_status" in cache: del cache["arcana_status"]
     if "system_status" in cache: del cache["system_status"]
-    return {"message": "Arcana Chat started successfully!"}
+    return {"message": f"Arcana Chat started successfully! Conversation ID: {new_conversation.id}"}
 
 @app.post("/api/myntrix/deploy-model")
 async def deploy_model():
@@ -1000,6 +1014,11 @@ async def websocket_shell(
                     if 'resize' in data_json:
                         cols, rows = data_json['resize']['cols'], data_json['resize']['rows']
                         logger.info(f"[WebSocket] Resizing PTY for client {session_id} to {cols}x{rows}")
+                        # To fully implement terminal resizing, uncomment the line below and ensure
+                        # 'termios' and 'struct' are imported at the top of the file.
+                        # import fcntl
+                        # import termios
+                        # import struct
                         # fcntl.ioctl(master_fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
                         # The above line is commented out, which means resize commands are not being processed.
                         # This might not be the cause of the immediate close, but it's an issue.

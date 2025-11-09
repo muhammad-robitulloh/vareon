@@ -7,7 +7,7 @@ import uuid # Import uuid
 import os # Import os
 from datetime import datetime # Added this line
 
-from database import get_db, User as DBUser, Workflow, Dataset # Changed from ..database
+from database import get_db, User as DBUser, Workflow, Dataset, MLModel # Changed from ..database
 from auth import get_current_user # Changed from ..auth
 from . import crud, schemas, storage_service
 
@@ -56,7 +56,12 @@ def trigger_workflow(workflow_id: str, current_user: DBUser = Depends(get_curren
     if db_workflow is None or db_workflow.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     
-    # TODO: Implement actual logic to trigger workflow execution (e.g., background task)
+    # Simulate actual logic to trigger workflow execution
+    print(f"Triggering workflow {db_workflow.name} (ID: {workflow_id})...")
+    # In a real scenario, this would involve:
+    # 1. Spawning a background task (e.g., using Celery, asyncio.create_task)
+    # 2. Passing the workflow ID and any necessary context to the background task
+    # 3. The background task would then interpret and execute the workflow steps.
     db_workflow.status = "running"
     db.commit()
     db.refresh(db_workflow)
@@ -204,8 +209,20 @@ def search_neosyntis_entities(
                 "format": ds.format
             })
     
-    # TODO: Add search for ML Models once implemented
-
+    if entity_type is None or entity_type == "ml_models":
+        ml_models = db.query(MLModel).filter(
+            MLModel.owner_id == str(current_user.id),
+            (MLModel.name.ilike(search_pattern)) | (MLModel.version.ilike(search_pattern))
+        ).all()
+        for model in ml_models:
+            results.append({
+                "type": "ml_model",
+                "id": model.id,
+                "name": model.name,
+                "version": model.version,
+                "status": model.status
+            })
+    
     return results
 
 ### Model Deployment & Machine Learning ###
@@ -257,7 +274,12 @@ def deploy_ml_model(model_id: str, current_user: DBUser = Depends(get_current_us
     if db_model is None or db_model.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ML Model not found")
     
-    # TODO: Implement actual deployment logic
+    # Simulate actual deployment logic
+    print(f"Deploying ML model {db_model.name} (ID: {model_id})...")
+    # In a real scenario, this would involve:
+    # 1. Interacting with a model serving infrastructure (e.g., TensorFlow Serving, TorchServe)
+    # 2. Containerizing the model and deploying it to a platform (e.g., Kubernetes)
+    # 3. Loading the model into memory for inference if it's a local deployment
     db_model.status = "deployed"
     db_model.deployed_at = datetime.utcnow()
     db.commit()
@@ -271,7 +293,12 @@ def train_ml_model(model_id: str, current_user: DBUser = Depends(get_current_use
     if db_model is None or db_model.owner_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ML Model not found")
     
-    # TODO: Implement actual training logic (e.g., background task)
+    # Simulate actual training logic
+    print(f"Initiating training for ML model {db_model.name} (ID: {model_id})...")
+    # In a real scenario, this would involve:
+    # 1. Spawning a background task for training
+    # 2. Integrating with ML frameworks (e.g., scikit-learn, TensorFlow, PyTorch)
+    # 3. Managing training data and tracking progress
     training_job_create = schemas.TrainingJobCreate(model_id=model_id, status="running")
     db_training_job = crud.create_training_job(db, training_job_create, owner_id=str(current_user.id))
     if db_training_job.metrics:
