@@ -23,7 +23,7 @@ export default function TerminalTab() {
 
   const createTerminal = () => {
     console.log('createTerminal called');
-    const id = Date.now().toString();
+    const id = crypto.randomUUID();
     const name = `Terminal ${terminals.length + 1}`;
 
     const terminal = new XTerm({
@@ -52,31 +52,35 @@ export default function TerminalTab() {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const accessToken = localStorage.getItem("access_token");
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/shell/${id}?token=${accessToken}`);
+    // Connect to the new orchestrator endpoint
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws-api/ws/arcana/${id}?token=${accessToken}`);
 
     ws.onopen = () => {
-      console.log(`Terminal ${id} WebSocket connected`);
-      terminal.writeln('Welcome to ARCANA Terminal');
-      terminal.writeln('Cognitive Shell Interface v2.1.0');
+      console.log(`Orchestrator WebSocket connected for terminal ${id}`);
+      terminal.writeln('Welcome to ARCANA Terminal (via Orchestrator)');
+      terminal.writeln('Cognitive Shell Interface v2.2.0');
       terminal.writeln('');
-      terminal.write('$ ');
-      // Send initial terminal dimensions to the backend
-      fitAddon.fit(); // Call fit() here
-      ws.send(JSON.stringify({ resize: { cols: terminal.cols, rows: terminal.rows } })); // Corrected format
+      // The backend shell process will send the initial prompt
+      fitAddon.fit();
+      const resizeEvent = {
+        type: 'shell_resize',
+        payload: { cols: terminal.cols, rows: terminal.rows }
+      };
+      ws.send(JSON.stringify(resizeEvent));
     };
 
     ws.onmessage = (event) => {
-      if (typeof event.data === 'string') {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'shell_output' && message.payload.data) {
+            terminal.write(message.payload.data);
+        } else {
+            console.log("Received unhandled message type:", message.type);
+        }
+      } catch (e) {
+        console.error("Failed to parse WebSocket message:", e);
+        // Fallback for non-JSON data if needed, though protocol should be JSON
         terminal.write(event.data);
-      } else if (event.data instanceof ArrayBuffer) {
-        const decoder = new TextDecoder('utf-8');
-        terminal.write(decoder.decode(event.data));
-      } else if (event.data instanceof Blob) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          terminal.write(reader.result as string);
-        };
-        reader.readAsText(event.data);
       }
     };
 
@@ -93,13 +97,21 @@ export default function TerminalTab() {
     terminal.onData((data) => {
       console.log(`terminal.onData for ${id}. Data: ${data}`);
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data); // Send raw data for input
+        const inputEvent = {
+          type: 'shell_input',
+          payload: { data: data }
+        };
+        ws.send(JSON.stringify(inputEvent));
       }
     });
 
     terminal.onResize((size) => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ resize: { cols: size.cols, rows: size.rows } })); // Corrected format
+        const resizeEvent = {
+          type: 'shell_resize',
+          payload: { cols: size.cols, rows: size.rows }
+        };
+        ws.send(JSON.stringify(resizeEvent));
       }
     });
 

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useSearch, useLocation } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger, Badge } from '@/components/ui';
-import { MessageSquare, Terminal } from 'lucide-react';
+import { MessageSquare, Terminal, Brain, Bot } from 'lucide-react'; // Added Brain and Bot icons
 import {
   ChatInterfaceTab,
   TerminalTab,
-  ContextMemoryPanel,
+  ContextMemoryPanel, // Keep using ContextMemoryPanel
+  ArcanaAgentTab, // Import the new ArcanaAgentTab
 } from '@/components/dashboard/arcana';
 
 export default function Arcana() {
@@ -63,8 +64,16 @@ export default function Arcana() {
                 className="gap-2 data-[state=active]:bg-background"
                 data-testid="tab-memory"
               >
-                <MessageSquare className="h-4 w-4" /> {/* Reusing MessageSquare for now, can be changed later */}
+                <Brain className="h-4 w-4" /> {/* Using Brain icon for Context Memory */}
                 Context Memory
+              </TabsTrigger>
+              <TabsTrigger
+                value="agent"
+                className="gap-2 data-[state=active]:bg-background"
+                data-testid="tab-agent"
+              >
+                <Bot className="h-4 w-4" /> {/* Using Bot icon for Arcana Mode Agent */}
+                Arcana Mode Agent
               </TabsTrigger>
             </TabsList>
           </div>
@@ -77,7 +86,10 @@ export default function Arcana() {
               <TerminalTab />
             </TabsContent>
             <TabsContent value="memory" className="h-full m-0">
-              <ContextMemoryPanel />
+              <ContextMemoryPanel /> {/* Use ContextMemoryPanel */}
+            </TabsContent>
+            <TabsContent value="agent" className="h-full m-0">
+              <ArcanaAgentTab /> {/* New ArcanaAgentTab */}
             </TabsContent>
           </div>
         </Tabs>

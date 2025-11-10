@@ -9,7 +9,7 @@
 ### Roadmap:
 
 1.  **Core Infrastructure & Setup:**
-    *   Establish a robust API framework (e.g., FastAPI, Express.js) within the `server-python/` directory.
+    *   Establish a robust API framework (e.g., FastAPI, Express.js) within the `server_python/` directory.
     *   Implement database connection and an Object-Relational Mapper (ORM) (e.g., Drizzle, SQLAlchemy).
     *   Set up basic error handling and logging mechanisms.
     *   Configure environment variables for sensitive data such as API keys and database credentials.

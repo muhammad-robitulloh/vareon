@@ -29,7 +29,7 @@ echo "--- Build successful ---"
 # 2. Start the Python backend server in the background
 echo ""
 echo "--- Starting Python backend server (production)... ---"
-python server-python/run.py --prod &
+python server_python/run.py --prod &
 PYTHON_BACKEND_PID=$!
 echo "Python backend started with PID: $PYTHON_BACKEND_PID"
 

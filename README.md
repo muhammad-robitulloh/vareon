@@ -37,7 +37,9 @@ This repository contains the backend services for the Vareon project, built with
 1.  **Clone the repository**:
     ```bash
     git clone https://github.com/your-repo/vareon.git
-    cd vareon/server-python
+    cd vareon/server_python
+    Create a `.env` file in the `server_python/` directory based on `.env.example` and fill in the necessary values (e.g., `SECRET_KEY`, `OPENROUTER_API_KEY`, `SMTP_PASSWORD`).
+DATASET_STORAGE_DIR=/data/data/com.termux/files/home/VE/V/VE/Vareon/server_python/data/neosyntis_datasets pytest server_python/tests/test_cognisys.py
     ```
 2.  **Create a virtual environment**:
     ```bash

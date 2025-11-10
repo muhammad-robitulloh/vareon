@@ -40,4 +40,5 @@ args = []
 # Opsional: gunakan ini untuk mendefinisikan command custom di Shell Replit
 [scripts]
 start = "python main.py"
-install = "pip install -r server-python/requirements.txt && (npm ci --prefix client || npm install --prefix client)"
+pip install -r server_python/requirements.txt
+install = "pip install -r server_python/requirements.txt && (npm ci --prefix client || npm install --prefix client)"
