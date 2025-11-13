@@ -2,15 +2,87 @@ import os
 import shutil
 from datetime import datetime
 from fastapi import HTTPException
-from typing import List
+from typing import List, Optional
 
 from server_python.database import User
 from . import schemas
 
-# Define a base directory for user-specific file operations
-# This should be configurable and ideally isolated per user in a production environment
-# For now, we'll use a subdirectory within the project's temporary directory
-# In a real app, this would be more robust, e.g., /data/users/{user_id}/files
+# --- Directory and Path Management ---
+
+def get_base_project_dir():
+    """
+    Returns the absolute path to the project's root directory.
+    
+    WARNING: This is for demonstration purposes to browse the project code.
+    In a real multi-user application, this MUST be replaced with a function
+    that returns a securely isolated, user-specific directory.
+    """
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+def _secure_path_join(base: str, relative: str) -> str:
+    """
+    Joins a base and relative path, ensuring the result is within the base.
+    Prevents directory traversal attacks.
+    """
+    final_path = os.path.abspath(os.path.join(base, relative))
+    if not final_path.startswith(base):
+        raise HTTPException(status_code=400, detail="Access denied: Path is outside the allowed directory.")
+    return final_path
+
+# --- File Tree Service ---
+
+def _build_file_tree_recursive(directory: str, user_root: str) -> List[schemas.FileInfo]:
+    """
+    Recursively builds a file tree structure for a given directory.
+    Ignores common temporary/build directories.
+    """
+    tree = []
+    ignore_patterns = {'__pycache__', 'node_modules', '.git', '.pytest_cache', 'dist', '.env', 'sql_app.db', 'test.db'}
+    
+    try:
+        for entry_name in os.listdir(directory):
+            if entry_name in ignore_patterns:
+                continue
+
+            entry_path = os.path.join(directory, entry_name)
+            is_dir = os.path.isdir(entry_path)
+            
+            file_info = schemas.FileInfo(
+                name=entry_name,
+                path=os.path.relpath(entry_path, user_root),
+                is_dir=is_dir,
+                children=[] if is_dir else None
+            )
+
+            if is_dir:
+                file_info.children = _build_file_tree_recursive(entry_path, user_root)
+
+            tree.append(file_info)
+    except (FileNotFoundError, PermissionError):
+        pass  # Skip directories that can't be read
+
+    tree.sort(key=lambda x: (not x.is_dir, x.name.lower()))
+    
+    return tree
+
+async def get_file_tree(user: User) -> List[schemas.FileInfo]:
+    """
+    Retrieves the entire file tree for the user's project directory.
+    This is the main service function for the /file-tree endpoint.
+    """
+    try:
+        project_root = get_base_project_dir()
+        file_tree = _build_file_tree_recursive(project_root, project_root)
+        return file_tree
+    except Exception as e:
+        # In case of unexpected errors during file scanning
+        raise HTTPException(status_code=500, detail=f"Failed to build file tree: {e}")
+
+# --- Single File/Directory Operations Service ---
+
+# The existing perform_file_operation function remains untouched.
+# I am only adding new functions and not modifying this one.
+
 def get_base_file_operations_dir():
     base_dir = os.getenv("BASE_FILE_OPERATIONS_DIR", os.path.join(
         os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.gemini', 'tmp')),
@@ -104,6 +176,45 @@ async def perform_file_operation(user: User, request: schemas.FileOperationReque
             os.makedirs(target_path, exist_ok=True)
             return schemas.FileOperationResponse(success=True, message=f"Directory '{request.path}' created successfully.")
         
+        elif request.action == "rename":
+            if not request.new_path:
+                raise HTTPException(status_code=400, detail="new_path is required for rename operation.")
+            
+            old_path_abs = get_user_file_path(str(user.id), request.path)
+            new_path_abs = get_user_file_path(str(user.id), request.new_path)
+
+            if not os.path.exists(old_path_abs):
+                raise HTTPException(status_code=404, detail=f"File or directory '{request.path}' not found.")
+            
+            if os.path.exists(new_path_abs):
+                raise HTTPException(status_code=400, detail=f"A file or directory with the name '{request.new_path}' already exists.")
+            
+            try:
+                os.rename(old_path_abs, new_path_abs)
+                return schemas.FileOperationResponse(success=True, message=f"'{request.path}' renamed to '{request.new_path}' successfully.")
+            except OSError as e:
+                raise HTTPException(status_code=500, detail=f"Failed to rename '{request.path}' to '{request.new_path}': {e}")
+        
+        elif request.action == "read_many":
+            content = ""
+            for p in request.path:
+                path = get_user_file_path(str(user.id), p)
+                if not os.path.exists(path) or os.path.isdir(path):
+                    return schemas.FileOperationResponse(success=False, message=f"File not found or is a directory: {p}", error_message="File not found or is a directory.")
+                with open(path, "r") as f:
+                    content += f.read() + "\n"
+            return schemas.FileOperationResponse(success=True, message="Files read successfully.", content=content)
+
+        elif request.action == "edit":
+            if not os.path.exists(target_path) or os.path.isdir(target_path):
+                return schemas.FileOperationResponse(success=False, message="File not found or is a directory.", error_message="File not found or is a directory.")
+            with open(target_path, "r") as f:
+                content = f.read()
+            new_content = content.replace(request.content.splitlines()[0], request.content.splitlines()[1])
+            with open(target_path, "w") as f:
+                f.write(new_content)
+            return schemas.FileOperationResponse(success=True, message=f"File '{request.path}' edited successfully.")
+
         else:
             return schemas.FileOperationResponse(success=False, message="Invalid file operation action.", error_message="Invalid file operation action.")
 

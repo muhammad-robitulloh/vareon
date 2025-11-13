@@ -10,6 +10,7 @@ import asyncio
 import json
 from typing import List, Dict, Any, Optional
 import uuid # Import uuid
+import psutil # Import psutil for system metrics
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, WebSocket, WebSocketDisconnect, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,7 +31,7 @@ if script_dir not in sys.path:
 # Now relative imports should work if main.py is run directly
 from server_python.database import Base, engine, SessionLocal, setup_default_user, get_user_from_db, create_user_in_db, get_db, User as DBUser, get_user_by_username_or_email, Agent as DBAgent, HardwareDevice as DBHardwareDevice, Workflow as DBWorkflow, Dataset as DBDataset, RoutingRule as DBRoutingRule, Conversation as DBConversation, ChatMessage as DBChatMessage, ContextMemory as DBContextMemory, LLMProvider as DBLLMProvider, LLMModel as DBLLMModel, UserLLMPreference as DBUserLLMPreference, TerminalSession as DBTerminalSession, TerminalCommandHistory as DBTerminalCommandHistory, populate_initial_llm_data # Alias User from database to DBUser and other models
 from server_python.auth import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, generate_verification_token, send_verification_email, PermissionChecker, VERIFICATION_TOKEN_EXPIRE_MINUTES, get_websocket_token, get_current_websocket_user
-from server_python.schemas import Token, User, UserCreate, UserBase, Agent, AgentCreate, HardwareDevice, HardwareDeviceUpdate, Workflow, WorkflowCreate, Dataset, DatasetCreate, RoutingRule, RoutingRuleCreate, MessageResponse, UserUpdate, TelemetryData, ChatRequest, ChatResponse, ChatMessage, Conversation, ConversationCreate, ConversationUpdate, ContextMemory, ContextMemoryCreate, ContextMemoryUpdate, LLMProvider, LLMProviderCreate, LLMProviderUpdate, LLMModel, LLMModelCreate, LLMModelUpdate, UserLLMPreference, UserLLMPreferenceCreate, UserLLMPreferenceUpdate, TerminalSession, TerminalSessionCreate, TerminalSessionUpdate, TerminalCommandHistory, TerminalCommandHistoryCreate
+from server_python.schemas import Token, User, UserCreate, UserBase, Agent, AgentCreate, HardwareDevice, HardwareDeviceUpdate, Workflow, WorkflowCreate, Dataset, DatasetCreate, RoutingRule, RoutingRuleCreate, MessageResponse, UserUpdate, TelemetryData, ChatRequest, ChatResponse, ChatMessage, Conversation, ConversationCreate, ConversationUpdate, ContextMemory, ContextMemoryCreate, ContextMemoryUpdate, LLMProvider, LLMProviderCreate, LLMProviderUpdate, LLMModel, LLMModelCreate, LLMModelUpdate, UserLLMPreference, UserLLMPreferenceCreate, UserLLMPreferenceUpdate, TerminalSession, TerminalSessionCreate, TerminalSessionUpdate, TerminalCommandHistory, TerminalCommandHistoryCreate, SystemStatus
 from server_python import llm_service # Import the new LLM service
 from server_python.cognisys import api as cognisys_api # Import the cognisys API router
 from server_python.myntrix import api as myntrix_api # Import the myntrix API router
@@ -38,6 +39,8 @@ from server_python.neosyntis import api as neosyntis_api # Import the neosyntis 
 from server_python.arcana import api as arcana_api # Import the arcana API router
 from server_python.orchestrator import main as orchestrator_app # Import the orchestrator app
 from server_python.context_memory import api as context_memory_api # Import the context_memory API router
+from server_python.git_service import api as git_api # Import the git_service API router
+from server_python import auth_oauth # Import the new auth_oauth router
 
 app = FastAPI()
 
@@ -46,6 +49,8 @@ app.include_router(myntrix_api.router, prefix="/api/myntrix", tags=["Myntrix"])
 app.include_router(neosyntis_api.router, prefix="/api/neosyntis", tags=["Neosyntis"])
 app.include_router(arcana_api.router, prefix="/api/arcana", tags=["Arcana"])
 app.include_router(context_memory_api.router, prefix="/api/context_memory", tags=["Context Memory"])
+app.include_router(git_api.router, prefix="/api/git", tags=["Git"])
+app.include_router(auth_oauth.router, prefix="/api/auth", tags=["OAuth"]) # Include the OAuth router
 app.mount("/ws-api", orchestrator_app.app)
 
 @app.on_event("startup")
@@ -103,60 +108,65 @@ async def receive_neosyntis_telemetry(telemetry_data: TelemetryData):
 
 # --- Multimodel Routing API ---
 # These endpoints are now handled by the cognisys router
-# @app.post("/api/cognisys/routing-rules", response_model=RoutingRule)
-# async def create_cognisys_routing_rule(rule: RoutingRuleCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-#     db_rule = DBRoutingRule(owner_id=str(current_user.id), name=rule.name, condition=rule.condition, target_model=rule.target_model, priority=rule.priority)
-#     db.add(db_rule)
-#     db.commit()
-#     db.refresh(db_rule)
-#     logger.info(f"AUDIT: Routing rule created. User ID: {current_user.id}, Rule ID: {db_rule.id}, Name: {db_rule.name}")
-#     if "cognisys_status" in cache: del cache["cognisys_status"]
-#     if "system_status" in cache: del cache["system_status"]
-#     return db_rule
+@app.post("/api/cognisys/routing-rules", response_model=RoutingRule)
+async def create_cognisys_routing_rule(rule: RoutingRuleCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_rule = DBRoutingRule(owner_id=str(current_user.id), name=rule.name, condition=rule.condition, target_model=rule.target_model, priority=rule.priority)
+    db.add(db_rule)
+    db.commit()
+    db.refresh(db_rule)
+    logger.info(f"AUDIT: Routing rule created. User ID: {current_user.id}, Rule ID: {db_rule.id}, Name: {db_rule.name}")
+    if "cognisys_status" in cache: del cache["cognisys_status"]
+    if "system_status" in cache: del cache["system_status"]
+    return db_rule
 
-# @app.get("/api/cognisys/routing-rules", response_model=List[RoutingRule])
-# async def list_cognisys_routing_rules(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-#     logger.info(f"AUDIT: Routing rules listed. User ID: {current_user.id}")
-#     return db.query(DBRoutingRule).filter(DBRoutingRule.owner_id == str(current_user.id)).all()
+@app.get("/api/cognisys/routing-rules", response_model=List[RoutingRule])
+async def list_cognisys_routing_rules(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    logger.info(f"AUDIT: Routing rules listed. User ID: {current_user.id}")
+    return db.query(DBRoutingRule).filter(DBRoutingRule.owner_id == str(current_user.id)).all()
 
-# @app.get("/api/cognisys/routing-rules/{rule_id}", response_model=RoutingRule)
-# async def get_cognisys_routing_rule(rule_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-#     db_rule = db.query(DBRoutingRule).filter(DBRoutingRule.id == rule_id, DBRoutingRule.owner_id == str(current_user.id)).first()
-#     if db_rule is None:
-#         logger.warning(f"AUDIT: Routing rule not found for get. User ID: {current_user.id}, Rule ID: {rule_id}")
-#         raise HTTPException(status_code=404, detail="Routing rule not found")
-#     logger.info(f"AUDIT: Routing rule retrieved. User ID: {current_user.id}, Rule ID: {db_rule.id}")
-#     return db_rule
+@app.get("/api/cognisys/routing-rules/{rule_id}", response_model=RoutingRule)
+async def get_cognisys_routing_rule(rule_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_rule = db.query(DBRoutingRule).filter(DBRoutingRule.id == rule_id, DBRoutingRule.owner_id == str(current_user.id)).first()
+    if db_rule is None:
+        logger.warning(f"AUDIT: Routing rule not found for get. User ID: {current_user.id}, Rule ID: {rule_id}")
+        raise HTTPException(status_code=404, detail="Routing rule not found")
+    logger.info(f"AUDIT: Routing rule retrieved. User ID: {current_user.id}, Rule ID: {db_rule.id}")
+    return db_rule
 
-# @app.put("/api/cognisys/routing-rules/{rule_id}", response_model=RoutingRule)
-# async def update_cognisys_routing_rule(rule_id: str, rule_update: RoutingRuleCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-#     db_rule = db.query(DBRoutingRule).filter(DBRoutingRule.id == rule_id, DBRoutingRule.owner_id == str(current_user.id)).first()
-#     if db_rule is None:
-#         logger.warning(f"AUDIT: Routing rule not found for update. User ID: {current_user.id}, Rule ID: {rule_id}")
-#         raise HTTPException(status_code=404, detail="Routing rule not found")
+@app.put("/api/cognisys/routing-rules/{rule_id}", response_model=RoutingRule)
+async def update_cognisys_routing_rule(rule_id: str, rule_update: RoutingRuleCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_rule = db.query(DBRoutingRule).filter(DBRoutingRule.id == rule_id, DBRoutingRule.owner_id == str(current_user.id)).first()
+    if db_rule is None:
+        logger.warning(f"AUDIT: Routing rule not found for update. User ID: {current_user.id}, Rule ID: {rule_id}")
+        raise HTTPException(status_code=404, detail="Routing rule not found")
     
-#     db_rule.name = rule_update.name
-#     db_rule.condition = rule_update.condition
-#     db_rule.target_model = rule_update.target_model
-#     db_rule.priority = rule_update.priority
-#     db.commit()
-#     db.refresh(db_rule)
-#     logger.info(f"AUDIT: Routing rule updated. User ID: {current_user.id}, Rule ID: {db_rule.id}, New Name: {db_rule.name}")
-#     if "cognisys_status" in cache: del cache["cognisys_status"]
-#     if "system_status" in cache: del cache["system_status"]
-#     return db_rule
+    db_rule.name = rule_update.name
+    if rule_update.condition is not None:
+        db_rule.condition = rule_update.condition
+    if rule_update.target_model is not None:
+        db_rule.target_model = rule_update.target_model
+    if rule_update.priority is not None:
+        db_rule.priority = rule_update.priority
+    db_rule.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_rule)
+    logger.info(f"AUDIT: Routing rule updated. User ID: {current_user.id}, Rule ID: {db_rule.id}, Name: {db_rule.name}")
+    if "cognisys_status" in cache: del cache["cognisys_status"]
+    if "system_status" in cache: del cache["system_status"]
+    return db_rule
 
-# @app.delete("/api/cognisys/routing-rules/{rule_id}", response_model=MessageResponse)
-# async def delete_cognisys_routing_rule(rule_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-#     db_rule = db.query(DBRoutingRule).filter(DBRoutingRule.id == rule_id, DBRoutingRule.owner_id == str(current_user.id)).first()
-#     if db_rule is None:
-#         logger.warning(f"AUDIT: Routing rule not found for delete. User ID: {current_user.id}, Rule ID: {rule_id}")
-#         raise HTTPException(status_code=404, detail="Routing rule not found")
-    
-#     db.delete(db_rule)
-#     db.commit()
-#     logger.info(f"AUDIT: Routing rule deleted. User ID: {current_user.id}, Rule ID: {rule_id}")
-#     return {"message": "Routing rule deleted successfully!"}
+@app.delete("/api/cognisys/routing-rules/{rule_id}", response_model=MessageResponse)
+async def delete_cognisys_routing_rule(rule_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_rule = db.query(DBRoutingRule).filter(DBRoutingRule.id == rule_id, DBRoutingRule.owner_id == str(current_user.id)).first()
+    if db_rule is None:
+        logger.warning(f"AUDIT: Routing rule not found for delete. User ID: {current_user.id}, Rule ID: {rule_id}")
+        raise HTTPException(status_code=404, detail="Routing rule not found")
+    db.delete(db_rule)
+    db.commit()
+    logger.info(f"AUDIT: Routing rule deleted. User ID: {current_user.id}, Rule ID: {rule_id}")
+    if "cognisys_status" in cache: del cache["cognisys_status"]
+    if "system_status" in cache: del cache["system_status"]
+    return {"message": "Routing rule deleted successfully"}
 
 # --- API Routes ---
 @app.get("/health")
@@ -263,32 +273,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 async def read_dashboard(current_user: User = Depends(PermissionChecker(["admin_access"]))):
     return current_user
 
-class SystemStatusModule(BaseModel):
-    status: str
-    uptime: str
-    activeChats: Optional[int] = 0
-    messagesProcessed: Optional[int] = 0
-    avgResponseTime: Optional[str] = "0s"
-    activeAgents: Optional[int] = 0
-    jobsCompleted: Optional[int] = 0
-    devicesConnected: Optional[int] = 0
-    activeWorkflows: Optional[int] = 0
-    datasetsManaged: Optional[int] = 0
-    searchQueriesProcessed: Optional[int] = 0
-    modelsActive: Optional[int] = 0
-    routingRules: Optional[int] = 0
-    requestsRouted: Optional[int] = 0
-
-class SystemStatus(BaseModel):
-    arcana: SystemStatusModule
-
-class ArcanaStatus(BaseModel):
-    status: str
-    uptime: str
-    activeChats: int
-    messagesProcessed: int
-    avgResponseTime: str
-
 def format_timedelta(td: timedelta) -> str:
     total_seconds = int(td.total_seconds())
     days = total_seconds // (24 * 3600)
@@ -305,7 +289,136 @@ def format_timedelta(td: timedelta) -> str:
     return " ".join(parts)
 
 @app.get("/api/system/status", response_model=SystemStatus)
-async def get_system_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_system_status(current_user: Optional[User] = Depends(get_current_user, use_cache=False), db: Session = Depends(get_db)):
+    # Fetch system metrics using psutil with fallback
+    cpu_percent = 0.0
+    memory_percent = 0.0
+    memory_total = 0
+    memory_available = 0
+    system_metrics_mocked = False
+    system_metrics_reason = ""
+
+    try:
+        cpu_percent = psutil.cpu_percent(interval=0.1) # Short interval for quick check
+        memory_info = psutil.virtual_memory()
+        memory_percent = memory_info.percent
+        memory_total = memory_info.total
+        memory_available = memory_info.available
+    except PermissionError:
+        logger.warning("Permission denied to access system metrics via psutil. Falling back to mock data.")
+        cpu_percent = 10.0
+        memory_percent = 30.0
+        memory_total = 8 * 1024 * 1024 * 1024 # 8 GB
+        memory_available = 5 * 1024 * 1024 * 1024 # 5 GB
+        system_metrics_mocked = True
+        system_metrics_reason = "PermissionError accessing system metrics"
+    except Exception as e:
+        logger.error(f"Failed to get system metrics via psutil: {e}. Falling back to mock data.", exc_info=True)
+        cpu_percent = 10.0
+        memory_percent = 30.0
+        memory_total = 8 * 1024 * 1024 * 1024 # 8 GB
+        memory_available = 5 * 1024 * 1024 * 1024 # 5 GB
+        system_metrics_mocked = True
+        system_metrics_reason = f"Unexpected error: {e}"
+
+    # Check for mock mode environment variable or if user is not authenticated
+    if os.getenv("VAREON_MOCK_SYSTEM_STATUS", "false").lower() == "true" or current_user is None:
+        mock_time = datetime.utcnow().isoformat()
+        return_data = {
+            "arcana": {
+                "status": "offline",
+                "uptime": "0s",
+                "activeChats": 0,
+                "messagesProcessed": 0,
+                "avgResponseTime": "0s",
+                "activeAgents": 0,
+                "jobsCompleted": 0,
+                "devicesConnected": 0,
+                "activeWorkflows": 0,
+                "datasetsManaged": 0,
+                "searchQueriesProcessed": 0,
+                "modelsActive": 0,
+                "routingRules": 0,
+                "requestsRouted": 0,
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory_percent,
+                "memory_total": memory_total,
+                "memory_available": memory_available,
+                "system_metrics_mocked": system_metrics_mocked,
+                "system_metrics_reason": system_metrics_reason,
+            },
+            "myntrix": {
+                "status": "offline",
+                "uptime": "0s",
+                "activeAgents": 0,
+                "jobsCompleted": 0,
+                "devicesConnected": 0,
+                "activeChats": 0,
+                "messagesProcessed": 0,
+                "avgResponseTime": "0s",
+                "activeWorkflows": 0,
+                "datasetsManaged": 0,
+                "searchQueriesProcessed": 0,
+                "modelsActive": 0,
+                "routingRules": 0,
+                "requestsRouted": 0,
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory_percent,
+                "memory_total": memory_total,
+                "memory_available": memory_available,
+                "system_metrics_mocked": system_metrics_mocked,
+                "system_metrics_reason": system_metrics_reason,
+            },
+            "neosyntis": {
+                "status": "offline",
+                "uptime": "0s",
+                "activeWorkflows": 0,
+                "datasetsManaged": 0,
+                "searchQueriesProcessed": 0,
+                "activeChats": 0,
+                "messagesProcessed": 0,
+                "avgResponseTime": "0s",
+                "activeAgents": 0,
+                "jobsCompleted": 0,
+                "devicesConnected": 0,
+                "modelsActive": 0,
+                "routingRules": 0,
+                "requestsRouted": 0,
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory_percent,
+                "memory_total": memory_total,
+                "memory_available": memory_available,
+                "system_metrics_mocked": system_metrics_mocked,
+                "system_metrics_reason": system_metrics_reason,
+            },
+            "cognisys": {
+                "status": "offline",
+                "uptime": "0s",
+                "modelsActive": 0,
+                "routingRules": 0,
+                "requestsRouted": 0,
+                "activeChats": 0,
+                "messagesProcessed": 0,
+                "avgResponseTime": "0s",
+                "activeAgents": 0,
+                "jobsCompleted": 0,
+                "devicesConnected": 0,
+                "activeWorkflows": 0,
+                "datasetsManaged": 0,
+                "searchQueriesProcessed": 0,
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory_percent,
+                "memory_total": memory_total,
+                "memory_available": memory_available,
+                "system_metrics_mocked": system_metrics_mocked,
+                "system_metrics_reason": system_metrics_reason,
+            },
+            "mocked": True,
+            "reason": "Mocked due to environment variable or unauthenticated access"
+        }
+        logger.info(f"Returning mocked system status: {json.dumps(return_data, indent=2)}")
+        return return_data
+
     cache_key = "system_status"
     if cache_key in cache and (datetime.now(timezone.utc) - cache[cache_key]["timestamp"]).total_seconds() < CACHE_TTL_SECONDS:
         return cache[cache_key]["data"]
@@ -351,6 +464,12 @@ async def get_system_status(current_user: User = Depends(get_current_user), db: 
             "modelsActive": 0,
             "routingRules": 0,
             "requestsRouted": 0,
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "memory_total": memory_total,
+            "memory_available": memory_available,
+            "system_metrics_mocked": system_metrics_mocked,
+            "system_metrics_reason": system_metrics_reason,
         },
         "myntrix": {
             "status": "online",
@@ -367,6 +486,12 @@ async def get_system_status(current_user: User = Depends(get_current_user), db: 
             "modelsActive": 0,
             "routingRules": 0,
             "requestsRouted": 0,
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "memory_total": memory_total,
+            "memory_available": memory_available,
+            "system_metrics_mocked": system_metrics_mocked,
+            "system_metrics_reason": system_metrics_reason,
         },
         "neosyntis": {
             "status": "online",
@@ -383,6 +508,12 @@ async def get_system_status(current_user: User = Depends(get_current_user), db: 
             "modelsActive": 0,
             "routingRules": 0,
             "requestsRouted": 0,
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "memory_total": memory_total,
+            "memory_available": memory_available,
+            "system_metrics_mocked": system_metrics_mocked,
+            "system_metrics_reason": system_metrics_reason,
         },
         "cognisys": {
             "status": "online",
@@ -399,101 +530,21 @@ async def get_system_status(current_user: User = Depends(get_current_user), db: 
             "activeWorkflows": 0,
             "datasetsManaged": 0,
             "searchQueriesProcessed": 0,
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "memory_total": memory_total,
+            "memory_available": memory_available,
+            "system_metrics_mocked": system_metrics_mocked,
+            "system_metrics_reason": system_metrics_reason,
         },
+        "mocked": False, # This will be set to True if any module is mocked
+        "reason": None,
     }
-    cache[cache_key] = {"data": response_data, "timestamp": datetime.now(timezone.utc)}
-    return response_data
+    # If any module had mocked system metrics, set the top-level mocked and reason
+    if system_metrics_mocked:
+        response_data["mocked"] = True
+        response_data["reason"] = system_metrics_reason
 
-class MyntrixStatus(BaseModel):
-    status: str
-    uptime: str
-    activeAgents: int
-    jobsCompleted: int
-    devicesConnected: int
-
-class NeosyntisStatus(BaseModel):
-    status: str
-    uptime: str
-    activeWorkflows: int
-    datasetsManaged: int
-    searchQueriesProcessed: int
-
-class CognisysStatus(BaseModel):
-    status: str
-    uptime: str
-    modelsActive: int
-    routingRules: int
-    requestsRouted: int
-
-@app.get("/api/arcana/status", response_model=ArcanaStatus)
-async def get_arcana_status():
-    cache_key = "arcana_status"
-    if cache_key in cache and (datetime.now(timezone.utc) - cache[cache_key]["timestamp"]).total_seconds() < CACHE_TTL_SECONDS:
-        return cache[cache_key]["data"]
-
-    current_time = datetime.now(timezone.utc)
-    arcana_uptime = format_timedelta(current_time - module_startup_times["arcana"])
-    response_data = {
-        "status": "online",
-        "uptime": arcana_uptime,
-        "activeChats": 12,
-        "messagesProcessed": 1543,
-        "avgResponseTime": "1.2s",
-    }
-    cache[cache_key] = {"data": response_data, "timestamp": datetime.now(timezone.utc)}
-    return response_data
-
-@app.get("/api/myntrix/status", response_model=MyntrixStatus)
-async def get_myntrix_status():
-    cache_key = "myntrix_status"
-    if cache_key in cache and (datetime.now(timezone.utc) - cache[cache_key]["timestamp"]).total_seconds() < CACHE_TTL_SECONDS:
-        return cache[cache_key]["data"]
-
-    current_time = datetime.now(timezone.utc)
-    myntrix_uptime = format_timedelta(current_time - module_startup_times["myntrix"])
-    response_data = {
-        "status": "online",
-        "uptime": myntrix_uptime,
-        "activeAgents": 8,
-        "jobsCompleted": 234,
-        "devicesConnected": 3,
-    }
-    cache[cache_key] = {"data": response_data, "timestamp": datetime.now(timezone.utc)}
-    return response_data
-
-@app.get("/api/neosyntis/status", response_model=NeosyntisStatus)
-async def get_neosyntis_status():
-    cache_key = "neosyntis_status"
-    if cache_key in cache and (datetime.now(timezone.utc) - cache[cache_key]["timestamp"]).total_seconds() < CACHE_TTL_SECONDS:
-        return cache[cache_key]["data"]
-
-    current_time = datetime.now(timezone.utc)
-    neosyntis_uptime = format_timedelta(current_time - module_startup_times["neosyntis"])
-    response_data = {
-        "status": "online",
-        "uptime": neosyntis_uptime,
-        "activeWorkflows": 5,
-        "datasetsManaged": 18,
-        "searchQueriesProcessed": 892,
-    }
-    cache[cache_key] = {"data": response_data, "timestamp": datetime.now(timezone.utc)}
-    return response_data
-
-@app.get("/api/cognisys/status", response_model=CognisysStatus)
-async def get_cognisys_status():
-    cache_key = "cognisys_status"
-    if cache_key in cache and (datetime.now(timezone.utc) - cache[cache_key]["timestamp"]).total_seconds() < CACHE_TTL_SECONDS:
-        return cache[cache_key]["data"]
-
-    current_time = datetime.now(timezone.utc)
-    cognisys_uptime = format_timedelta(current_time - module_startup_times["cognisys"])
-    response_data = {
-        "status": "online",
-        "uptime": cognisys_uptime,
-        "modelsActive": 12,
-        "routingRules": 24,
-        "requestsRouted": 3421,
-    }
     cache[cache_key] = {"data": response_data, "timestamp": datetime.now(timezone.utc)}
     return response_data
 

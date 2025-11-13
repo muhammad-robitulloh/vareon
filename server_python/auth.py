@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status, WebSocket
+from fastapi import Depends, HTTPException, status, Request, WebSocket
 from schemas import TokenData
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -157,13 +157,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-import database # Import the database module
-from database import get_user_from_db, User # Keep other necessary imports
+from . import database # Import the database module
+from .database import get_user_from_db, User # Keep other necessary imports
 
 # ... (rest of the file) ...
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
-    logger.info(f"get_current_user received token: {token[:10]}...") # Log first 10 chars for security
+# --- User Authentication and Authorization ---
+
+async def _get_user_from_token(token: str, db: Session) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -171,29 +172,36 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        logger.info(f"JWT decoded payload: {payload}")
         username: str = payload.get("username")
         if username is None:
             logger.warning("Username not found in JWT payload, raising credentials_exception.")
             raise credentials_exception
         token_data = TokenData(username=username)
-        logger.info(f"Username from token: {token_data.username}")
+        user = db.query(User).filter(User.username == token_data.username).first()
+        if user is None:
+            logger.warning(f"User {token_data.username} not found in database, raising credentials_exception.")
+            raise credentials_exception
+        logger.info(f"User {user.username} successfully authenticated.")
+        return user
     except JWTError as e:
         logger.warning(f"JWT decoding error: {e}, raising credentials_exception.")
         raise credentials_exception
-    user = db.query(User).filter(User.username == token_data.username).first()
-    if user is None:
-        logger.warning(f"User {token_data.username} not found in database, raising credentials_exception.")
+    except Exception as e:
+        logger.error(f"Unexpected error in _get_user_from_token: {e}", exc_info=True)
         raise credentials_exception
-    # Temporarily bypass email verification for testing
-    # if not user.is_verified:
-    #     logger.warning(f"User {user.username} email not verified (is_verified: {user.is_verified}), raising 403 Forbidden.")
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Email not verified. Please check your email for a verification code."
-    #     )
-    logger.info(f"User {user.username} successfully authenticated.")
-    return user
+
+async def get_current_user(request: Request, db: Session = Depends(database.get_db)):
+    token: Optional[str] = None
+    authorization: Optional[str] = request.headers.get("Authorization")
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+
+    if token is None:
+        logger.info("No token found in request, returning None for current_user.")
+        return None
+
+    logger.info(f"get_current_user received token: {token[:10]}... (Type: {type(token)})")
+    return await _get_user_from_token(token, db)
 
 async def get_websocket_token(websocket: WebSocket) -> str:
     token = websocket.query_params.get("token")
@@ -204,7 +212,7 @@ async def get_websocket_token(websocket: WebSocket) -> str:
     return token
 
 async def get_current_websocket_user(ws_token: str = Depends(get_websocket_token), db: Session = Depends(database.get_db)):
-    return await get_current_user(ws_token, db)
+    return await _get_user_from_token(ws_token, db)
 
 def has_role(user: User, role_name: str) -> bool:
     for role in user.roles:
@@ -214,9 +222,9 @@ def has_role(user: User, role_name: str) -> bool:
 
 def has_permission(user: User, permission_name: str) -> bool:
     for role in user.roles:
-        # Assuming role.permissions is List[str] as per schemas.py
-        if permission_name in role.permissions:
-            return True
+        for permission in role.permissions:
+            if permission.name == permission_name:
+                return True
     return False
 
 class RoleChecker:

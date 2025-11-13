@@ -3,8 +3,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
-from database import get_db, User as DBUser
-from auth import get_current_user
+from server_python.database import get_db, User as DBUser
+from ..auth import get_current_user
 from . import crud, schemas
 
 router = APIRouter()

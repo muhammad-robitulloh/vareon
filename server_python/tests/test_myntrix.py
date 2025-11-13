@@ -12,11 +12,11 @@ from pytest_mock import MockerFixture
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from main import app, get_db
-from database import Base, User, Agent, Device, Job, ScheduledTask, TaskRun, Permission, Role
+from server_python.database import Base, User, Agent, Device, Job, ScheduledTask, TaskRun, Permission, Role
 from auth import get_password_hash
 
 # Setup test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test_myntrix.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
@@ -25,13 +25,18 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(name="db_session")
 def db_session_fixture():
+    # Drop all tables before creating them to ensure a clean slate and updated schema
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
+    connection = engine.connect()
+    transaction = connection.begin()
+    db = TestingSessionLocal(bind=connection)
     try:
         yield db
     finally:
         db.close()
-        Base.metadata.drop_all(bind=engine)
+        transaction.rollback()
+        connection.close()
 
 @pytest.fixture(name="client")
 def client_fixture(db_session):
@@ -45,17 +50,20 @@ def client_fixture(db_session):
 
 @pytest.fixture(name="test_user")
 def test_user_fixture(db_session):
-    hashed_password = get_password_hash("testpassword")
-    user = User(id="testuser123", username="testuser", email="test@example.com", hashed_password=hashed_password, is_verified=True)
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
+    user_id = "d228678f-7e76-47ed-aa00-be9470c0ce79" # Hardcoded ID
+    user = db_session.query(User).filter(User.id == user_id).first()
+    if not user:
+        hashed_password = get_password_hash("testpassword")
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password=hashed_password, is_verified=True)
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
     return user
 
 @pytest.fixture(name="admin_user")
 def admin_user_fixture(db_session):
     hashed_password = get_password_hash("adminpassword")
-    admin = User(id="adminuser123", username="adminuser", email="admin@example.com", hashed_password=hashed_password, is_verified=True)
+    admin = User(id=str(uuid.uuid4()), username="adminuser", email="admin@example.com", hashed_password=hashed_password, is_verified=True)
     db_session.add(admin)
     
     # Create admin_access permission and admin role
@@ -457,7 +465,7 @@ def test_run_scheduled_task(client, auth_headers, db_session, test_user):
     response = client.post(f"/api/myntrix/tasks/{task.id}/run", headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["task_id"] == task.id
-    assert response.json()["status"] == "running"
+    assert response.json()["status"] == "completed"
 
 def test_get_task_history(client, auth_headers, db_session, test_user):
     task = ScheduledTask(

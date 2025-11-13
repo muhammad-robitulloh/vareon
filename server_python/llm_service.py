@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import uuid # Import uuid
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from database import Agent as DBAgent, Workflow as DBWorkflow, ChatMessage as DBChatMessage, Conversation as DBConversation, User as DBUser, LLMProvider, LLMModel # Import necessary DB models
+from .database import Agent as DBAgent, Workflow as DBWorkflow, ChatMessage as DBChatMessage, Conversation as DBConversation, User as DBUser, LLMProvider, LLMModel # Import necessary DB models
 from datetime import datetime, timezone # Import datetime and timezone for utcnow
 
 # Load environment variables
@@ -14,7 +14,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-pro")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-1.5-pro")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 async def get_openrouter_completion(user_id: str, message: str, model_name: Optional[str] = None, db: Optional[Session] = None, owner_id: Optional[str] = None, conversation_id: Optional[uuid.UUID] = None) -> str:

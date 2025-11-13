@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from terminal.service import TerminalService
 from cognisys.service import ChatService
 from .connection_manager import manager
-from database import User as DBUser
+from server_python.database import User as DBUser
 
 class EventHandler:
     def __init__(self):

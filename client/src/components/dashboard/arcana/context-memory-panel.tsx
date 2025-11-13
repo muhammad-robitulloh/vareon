@@ -1,26 +1,32 @@
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Button, Badge, ScrollArea, Tabs, TabsContent, TabsList, TabsTrigger, Label, Switch, Slider } from '@/components/ui';
-import { Brain, Edit, Trash2, User, FolderGit, MessageSquare } from 'lucide-react';
+import { Brain, Edit, Trash2, User, FolderGit, MessageSquare, PlusCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // --- INTERFACES ---
 
-interface UserPreference {
+interface ContextItem {
   id: string;
   key: string;
-  value: string;
-  source: string;
+  value: Record<string, any>; // Value is now a JSON object
 }
 
-interface ProjectKnowledge {
-  id: string;
+interface UserPreference extends ContextItem {
+  source: string; // Specific field for UserPreference
+}
+
+interface ProjectKnowledge extends ContextItem {
   repo: string;
   summary: string;
   techStack: string[];
 }
 
-interface ConversationSnippet {
-  id: string;
+interface ConversationSnippet extends ContextItem {
   topic: string;
   summary: string;
   timestamp: string;
@@ -61,6 +67,29 @@ const deleteContextItem = async (itemId: string): Promise<void> => {
     }
 };
 
+interface CreateContextItemPayload {
+  type: 'preference' | 'project' | 'conversation';
+  key: string;
+  value: Record<string, any>;
+}
+
+const createContextItem = async (payload: CreateContextItemPayload): Promise<any> => {
+  const token = localStorage.getItem('access_token');
+  const response = await fetch('/api/context_memory/item', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to create context item');
+  }
+  return response.json();
+};
+
 
 // --- COMPONENTS ---
 
@@ -84,6 +113,11 @@ export default function ContextMemoryPanel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [isCreateItemDialogOpen, setIsCreateItemDialogOpen] = useState(false);
+  const [newItemType, setNewItemType] = useState<'preference' | 'project' | 'conversation'>('preference');
+  const [newKey, setNewKey] = useState('');
+  const [newValue, setNewValue] = useState(''); // Storing as string, will parse to JSON
+
   const { data: contextMemory, isLoading, error } = useQuery<ContextMemory, Error>({
     queryKey: ['arcanaContextMemory'],
     queryFn: fetchContextMemory,
@@ -100,8 +134,31 @@ export default function ContextMemoryPanel() {
     },
   });
 
+  const createMutation = useMutation({
+    mutationFn: createContextItem,
+    onSuccess: () => {
+      toast({ title: "Success", description: "Context item created." });
+      queryClient.invalidateQueries({ queryKey: ['arcanaContextMemory'] });
+      setIsCreateItemDialogOpen(false);
+      setNewKey('');
+      setNewValue('');
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleDelete = (itemId: string) => {
     deleteMutation.mutate(itemId);
+  };
+
+  const handleCreateItem = () => {
+    try {
+      const parsedValue = JSON.parse(newValue);
+      createMutation.mutate({ type: newItemType, key: newKey, value: parsedValue });
+    } catch (e) {
+      toast({ title: "Error", description: "Invalid JSON for value.", variant: "destructive" });
+    }
   };
 
   if (isLoading) return <div className="p-4">Loading context memory...</div>;
@@ -109,9 +166,9 @@ export default function ContextMemoryPanel() {
 
   return (
     <div className="h-full flex flex-col">
-        <div className="p-6 border-b">
+        <div className="p-6 border-b flex justify-between items-center">
             <h1 className="text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6" /> Arcana Context Memory</h1>
-            <p className="text-muted-foreground">Configure Arcana's learning and view the contextual data it has recognized.</p>
+            <Button onClick={() => setIsCreateItemDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Add Context Item</Button>
         </div>
         <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
             {/* Left Column: Configuration */}
@@ -162,7 +219,7 @@ export default function ContextMemoryPanel() {
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {contextMemory?.userPreferences.map(pref => (
                                     <ContextCard key={pref.id} title={pref.key} onEdit={() => {}} onDelete={() => handleDelete(pref.id)}>
-                                        <p><strong>Value:</strong> {pref.value}</p>
+                                        <p><strong>Value:</strong> {JSON.stringify(pref.value)}</p>
                                         <p className="text-xs text-muted-foreground">Source: {pref.source}</p>
                                     </ContextCard>
                                 ))}
@@ -171,10 +228,11 @@ export default function ContextMemoryPanel() {
                         <TabsContent value="projects">
                             <div className="grid grid-cols-1 gap-4">
                                 {contextMemory?.projectKnowledge.map(proj => (
-                                    <ContextCard key={proj.id} title={proj.repo} onEdit={() => {}} onDelete={() => handleDelete(proj.id)}>
-                                        <p>{proj.summary}</p>
+                                    <ContextCard key={proj.id} title={proj.key} onEdit={() => {}} onDelete={() => handleDelete(proj.id)}>
+                                        <p><strong>Repo:</strong> {proj.value.repo}</p>
+                                        <p><strong>Summary:</strong> {proj.value.summary}</p>
                                         <div className="flex flex-wrap gap-2 mt-2">
-                                            {proj.techStack.map(tech => <Badge key={tech} variant="secondary">{tech}</Badge>)}
+                                            {proj.value.techStack?.map((tech: string) => <Badge key={tech} variant="secondary">{tech}</Badge>)}
                                         </div>
                                     </ContextCard>
                                 ))}
@@ -183,9 +241,10 @@ export default function ContextMemoryPanel() {
                         <TabsContent value="conversations">
                             <div className="grid grid-cols-1 gap-4">
                                 {contextMemory?.conversationSnippets.map(conv => (
-                                    <ContextCard key={conv.id} title={conv.topic} onEdit={() => {}} onDelete={() => handleDelete(conv.id)}>
-                                        <p>"{conv.summary}"</p>
-                                        <p className="text-xs text-muted-foreground mt-2">Recognized {conv.timestamp}</p>
+                                    <ContextCard key={conv.id} title={conv.key} onEdit={() => {}} onDelete={() => handleDelete(conv.id)}>
+                                        <p>"{conv.value.summary}"</p>
+                                        <p className="text-xs text-muted-foreground mt-2">Topic: {conv.value.topic}</p>
+                                        <p className="text-xs text-muted-foreground">Timestamp: {conv.value.timestamp}</p>
                                     </ContextCard>
                                 ))}
                             </div>
@@ -194,6 +253,66 @@ export default function ContextMemoryPanel() {
                 </Tabs>
             </div>
         </div>
+
+        {/* Create Context Item Dialog */}
+        <Dialog open={isCreateItemDialogOpen} onOpenChange={setIsCreateItemDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Context Item</DialogTitle>
+              <DialogDescription>
+                Store a new piece of information for Arcana to remember.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="itemType" className="text-right">
+                  Type
+                </Label>
+                <Select value={newItemType} onValueChange={(value: 'preference' | 'project' | 'conversation') => setNewItemType(value)}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select item type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="preference">Preference</SelectItem>
+                    <SelectItem value="project">Project Knowledge</SelectItem>
+                    <SelectItem value="conversation">Conversation Snippet</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="key" className="text-right">
+                  Key
+                </Label>
+                <Input
+                  id="key"
+                  value={newKey}
+                  onChange={(e) => setNewKey(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="value" className="text-right">
+                  Value (JSON)
+                </Label>
+                <Textarea
+                  id="value"
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  className="col-span-3"
+                  rows={5}
+                  placeholder='e.g., {"language": "Python", "level": "advanced"}'
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateItemDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleCreateItem} disabled={createMutation.isPending}>
+                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Add Item
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 import json
 
-from database import Agent, Device, Job, ScheduledTask, TaskRun # Changed from ..database
+from server_python.database import Agent, Device, Job, ScheduledTask, TaskRun # Changed from ..database
 from .schemas import AgentCreate, AgentUpdate, DeviceCreate, DeviceUpdate, JobCreate, JobUpdate, ScheduledTaskCreate, ScheduledTaskUpdate, TaskRunCreate, TaskRunUpdate
 
 ### Agent CRUD Operations ###

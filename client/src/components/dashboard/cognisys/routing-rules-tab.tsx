@@ -1,22 +1,46 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Badge, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Badge, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui';
+import { useAuth } from '@/hooks/use-auth';
 import { GitBranch, Plus, Trash2, Activity } from 'lucide-react';
 import { useToast } from '@/hooks/dashboard/use-toast';
+import ConditionBuilder from './ConditionBuilder';
+import AddModelForm from './AddModelForm'; // Import AddModelForm
 
 export default function RoutingRulesTab() {
+  const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [newRuleIntent, setNewRuleIntent] = useState('');
-  const [newRuleCondition, setNewRuleCondition] = useState('');
+  const [newRuleCondition, setNewRuleCondition] = useState<any>({ id: 'root', combinator: 'and', rules: [] });
   const [newRuleTargetModel, setNewRuleTargetModel] = useState('');
   const [newRulePriority, setNewRulePriority] = useState(1);
+
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [isAddModelDialogOpen, setIsAddModelDialogOpen] = useState(false);
+
+  const handleAddModel = (modelData: any) => {
+    addModelMutation.mutate({
+      model_name: modelData.modelName,
+      provider_id: modelData.providerId,
+      type: modelData.modelType,
+      is_active: true, // Default to active
+      role: 'general', // Default role
+      max_tokens: modelData.maxTokens,
+      cost_per_token: modelData.costPerToken,
+    });
+    setIsAddModelDialogOpen(false);
+  };
 
   const { data: routingRules, isLoading, error } = useQuery({
     queryKey: ['cognisysRoutingRules'],
     queryFn: async () => {
-      const response = await fetch('/api/cognisys/routing-rules');
+      const response = await fetch('/api/cognisys/routing-rules/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       if (!response.ok) {
         const errorBody = await response.text();
         console.error("API Error Response:", errorBody);
@@ -24,14 +48,79 @@ export default function RoutingRulesTab() {
       }
       return response.json();
     },
+    enabled: !!token,
+  });
+
+  const { data: providers, isLoading: isLoadingProviders, error: providersError } = useQuery({
+    queryKey: ['cognisysProviders'],
+    queryFn: async () => {
+      const response = await fetch('/api/cognisys/providers/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch providers');
+      }
+      return response.json();
+    },
+    enabled: !!token,
+  });
+
+  const { data: llmModels, isLoading: isLoadingModels, error: modelsError } = useQuery({
+    queryKey: ['cognisysLLMModels'],
+    queryFn: async () => {
+      const response = await fetch('/api/cognisys/models/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch LLM models');
+      }
+      return response.json();
+    },
+    enabled: !!token,
+  });
+
+  const addModelMutation = useMutation({
+    mutationFn: async (modelData: any) => {
+      const response = await fetch('/api/cognisys/models/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(modelData),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to create model');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Model Created', description: 'New model has been successfully created.' });
+      queryClient.invalidateQueries({ queryKey: ['cognisysLLMModels'] });
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to create model: ${err.message}`, variant: 'destructive' });
+    },
   });
 
   const createRuleMutation = useMutation({
-    mutationFn: async (ruleData: { intent: string; condition: string; targetModel: string; priority: number }) => {
-      const response = await fetch('/api/cognisys/routing-rules', {
+    mutationFn: async (ruleData: { intent: string; condition: any; targetModel: string; priority: number }) => {
+      const response = await fetch('/api/cognisys/routing-rules/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ruleData),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: ruleData.intent, // Map intent to name
+          condition: JSON.stringify(ruleData.condition),
+          target_model: ruleData.targetModel, // Map targetModel to target_model
+          priority: ruleData.priority,
+        }),
       });
       if (!response.ok) {
         const errorBody = await response.text();
@@ -42,9 +131,8 @@ export default function RoutingRulesTab() {
     },
     onSuccess: () => {
       toast({ title: 'Rule Created', description: 'New routing rule has been successfully created.' });
-      queryClient.invalidateQueries({ queryKey: ['cognisysRoutingRules'] });
       setNewRuleIntent('');
-      setNewRuleCondition('');
+      setNewRuleCondition({ id: 'root', combinator: 'and', rules: [] });
       setNewRuleTargetModel('');
       setNewRulePriority(1);
     },
@@ -53,9 +141,50 @@ export default function RoutingRulesTab() {
     },
   });
 
+  const updateRuleMutation = useMutation({
+    mutationFn: async ({ ruleId, ruleData }: { ruleId: string, ruleData: { intent: string; condition: any; targetModel: string; priority: number } }) => {
+      const response = await fetch(`/api/cognisys/routing-rules/${ruleId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: ruleData.intent, // Map intent to name
+          condition: JSON.stringify(ruleData.condition),
+          target_model: ruleData.targetModel, // Map targetModel to target_model
+          priority: ruleData.priority,
+        }),
+      });
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("API Error Response (Update Rule):", errorBody);
+        throw new Error(`Failed to update routing rule: ${response.status} ${response.statusText} - ${errorBody}`);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Rule Updated', description: 'Routing rule has been successfully updated.' });
+      queryClient.invalidateQueries({ queryKey: ['cognisysRoutingRules'] });
+      setEditingRuleId(null);
+      setNewRuleIntent('');
+      setNewRuleCondition({ id: 'root', combinator: 'and', rules: [] });
+      setNewRuleTargetModel('');
+      setNewRulePriority(1);
+    },
+    onError: (err) => {
+      toast({ title: 'Error', description: `Failed to update rule: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
   const deleteRuleMutation = useMutation({
     mutationFn: async (ruleId: string) => {
-      const response = await fetch(`/api/cognisys/routing-rules/${ruleId}`, { method: 'DELETE' });
+      const response = await fetch(`/api/cognisys/routing-rules/${ruleId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       if (!response.ok) {
         const errorBody = await response.text();
         console.error("API Error Response (Delete Rule):", errorBody);
@@ -131,26 +260,46 @@ export default function RoutingRulesTab() {
             </div>
             <div className="space-y-2">
               <Label>Condition</Label>
-              <Input
-                placeholder='contains("keyword")'
-                data-testid="input-condition"
-                value={newRuleCondition}
-                onChange={(e) => setNewRuleCondition(e.target.value)}
-              />
+              <ConditionBuilder root={newRuleCondition} setRoot={setNewRuleCondition} />
             </div>
             <div className="space-y-2">
               <Label>Target Model</Label>
-              <Select value={newRuleTargetModel} onValueChange={setNewRuleTargetModel}>
-                <SelectTrigger data-testid="select-target-model">
-                  <SelectValue placeholder="Select model..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gpt-4">GPT-4</SelectItem>
-                  <SelectItem value="claude">Claude-3.5-Sonnet</SelectItem>
-                  <SelectItem value="codestral">Codestral</SelectItem>
-                  <SelectItem value="gemini">Gemini-Pro</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select value={newRuleTargetModel} onValueChange={setNewRuleTargetModel}>
+                  <SelectTrigger data-testid="select-target-model">
+                    <SelectValue placeholder="Select model..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {llmModels?.map((model: any) => (
+                      <SelectItem key={model.id} value={model.model_name}>
+                        {model.model_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Dialog open={isAddModelDialogOpen} onOpenChange={setIsAddModelDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Add New Model</DialogTitle>
+                      <DialogDescription>
+                        Add a new LLM model to your system.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <AddModelForm
+                      onAddModel={handleAddModel}
+                      providers={providers || []}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -180,7 +329,7 @@ export default function RoutingRulesTab() {
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <Badge variant="default" className="text-xs">
-                                  {rule.intent.replace(/_/g, ' ')}
+                                  {rule.name.replace(/_/g, ' ')}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs">
                                   Priority {rule.priority}
@@ -200,7 +349,18 @@ export default function RoutingRulesTab() {
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <Button variant="ghost" size="sm">Edit</Button>
+                              <Button variant="ghost" size="sm" onClick={() => {
+                                setEditingRuleId(rule.id);
+                                setNewRuleIntent(rule.intent);
+                                try {
+                                  setNewRuleCondition(JSON.parse(rule.condition));
+                                } catch (e) {
+                                  console.error("Failed to parse rule condition:", e);
+                                  setNewRuleCondition({ id: 'root', combinator: 'and', rules: [] });
+                                }
+                                setNewRuleTargetModel(rule.targetModel);
+                                setNewRulePriority(rule.priority);
+                              }}>Edit</Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -233,6 +393,81 @@ export default function RoutingRulesTab() {
           )}
         </CardContent>
       </Card>
+
+      {editingRuleId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Edit Rule</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Intent Type</Label>
+                <Select value={newRuleIntent} onValueChange={setNewRuleIntent}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select intent..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="code_generation">Code Generation</SelectItem>
+                    <SelectItem value="reasoning">Reasoning</SelectItem>
+                    <SelectItem value="conversation">Conversation</SelectItem>
+                    <SelectItem value="summarization">Summarization</SelectItem>
+                    <SelectItem value="shell_command">Shell Command</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Condition</Label>
+                <ConditionBuilder root={newRuleCondition} setRoot={setNewRuleCondition} />
+              </div>
+              <div className="space-y-2">
+                <Label>Target Model</Label>
+                <div className="flex items-center gap-2">
+                  <Select value={newRuleTargetModel} onValueChange={setNewRuleTargetModel}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select model..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {llmModels?.map((model: any) => (
+                        <SelectItem key={model.id} value={model.model_name}>
+                          {model.model_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setEditingRuleId(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  updateRuleMutation.mutate({
+                    ruleId: editingRuleId,
+                    ruleData: {
+                      intent: newRuleIntent,
+                      condition: newRuleCondition, // This will be stringified in the mutationFn
+                      targetModel: newRuleTargetModel,
+                      priority: newRulePriority,
+                    },
+                  });
+                }}
+                disabled={updateRuleMutation.isPending}
+              >
+                {updateRuleMutation.isPending ? <Activity className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Save Changes
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-gradient-to-br from-primary/10 via-background to-accent/10 border-primary/20">
         <CardHeader>

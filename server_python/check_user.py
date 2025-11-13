@@ -4,7 +4,7 @@ import os
 # Add the server-python directory to sys.path
 sys.path.insert(0, os.path.abspath('.'))
 
-from database import SessionLocal, User
+from server_python.database import SessionLocal, User
 
 def check_user_data(email: str):
     db = SessionLocal()

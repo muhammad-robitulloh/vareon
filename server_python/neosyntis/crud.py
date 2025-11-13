@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 import json
 
-from database import Workflow, Dataset, TelemetryData, MLModel, TrainingJob # Changed from ..database
+from server_python.database import Workflow, Dataset, TelemetryData, MLModel, TrainingJob # Changed from ..database
 from .schemas import WorkflowCreate, WorkflowUpdate, DatasetCreate, DatasetUpdate, TelemetryDataCreate, MLModelCreate, MLModelUpdate, TrainingJobCreate, TrainingJobUpdate
 
 ### Workflow CRUD Operations ###

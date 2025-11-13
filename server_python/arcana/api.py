@@ -1,18 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 import json
+import asyncio
 
 from server_python.database import get_db, User as DBUser
 from server_python.auth import get_current_user
 from . import crud, schemas
-from . import code_generation_service # Import the new service
-from . import shell_translation_service # Import the new service
-from . import reasoning_service # Import the new service
-from . import file_management_service # Import the new service
-from . import agent_orchestration_service # Import the new service
+from . import code_generation_service
+from . import shell_translation_service
+from . import reasoning_service
+from . import file_management_service
+from . import agent_orchestration_service
 
 router = APIRouter()
+
+@router.get("/file-tree/", response_model=List[schemas.FileInfo])
+async def get_arcana_file_tree(
+    current_user: DBUser = Depends(get_current_user)
+):
+    """
+    Retrieves the entire file tree for the user's sandboxed project directory.
+    This provides a hierarchical view of all files and folders.
+    """
+    return await file_management_service.get_file_tree(current_user)
 
 @router.post("/agents/", response_model=schemas.ArcanaAgentResponse, status_code=status.HTTP_201_CREATED)
 def create_arcana_agent(
@@ -134,18 +145,138 @@ async def file_operations_endpoint(
     """
     return await file_management_service.perform_file_operation(current_user, request)
 
-@router.post("/agents/{agent_id}/execute", response_model=schemas.AgentExecuteResponse)
+@router.post("/agents/{agent_id}/execute", response_model=schemas.ArcanaAgentJobResponse)
 async def execute_arcana_agent_task(
     agent_id: str,
     request: schemas.AgentExecuteRequest,
+    background_tasks: BackgroundTasks,
     current_user: DBUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Executes a task for a specific Arcana Agent.
+    Executes a task for a specific Arcana Agent as a background job.
     """
-    # Ensure the agent_id in the path matches the one in the request body
     if str(request.agent_id) != agent_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent ID in path and request body do not match.")
     
-    return await agent_orchestration_service.execute_agent_task(db, current_user, request)
+    # Initial messages for the agent
+    initial_messages = [{"role": "user", "content": request.task_prompt}]
+
+    job = crud.create_agent_job(
+        db, 
+        agent_id=agent_id, 
+        owner_id=str(current_user.id), 
+        goal=request.task_prompt,
+        message_history=initial_messages, # Save initial messages
+        original_request=request # Save original request
+    )
+    
+    background_tasks.add_task(
+        agent_orchestration_service.execute_agent_task, 
+        db, 
+        current_user, 
+        request, # Pass the initial request
+        job.id,
+        initial_messages=initial_messages, # Pass initial messages to the task
+        original_request_obj=request # Pass original request object to the task
+    )
+    
+    return job
+
+@router.get("/agents/{agent_id}/jobs/", response_model=List[schemas.ArcanaAgentJobResponse])
+def get_agent_jobs(
+    agent_id: str,
+    current_user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 10
+):
+    """
+    Get all jobs for a specific agent.
+    """
+    return crud.get_agent_jobs_for_agent(db, agent_id=agent_id, owner_id=str(current_user.id), skip=skip, limit=limit)
+
+@router.get("/jobs/{job_id}", response_model=schemas.ArcanaAgentJobResponse)
+def get_agent_job(
+    job_id: str,
+    current_user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the status and details of a specific agent job.
+    """
+    job = crud.get_agent_job(db, job_id=job_id, owner_id=str(current_user.id))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+@router.get("/jobs/{job_id}/logs", response_model=List[schemas.ArcanaAgentJobLogResponse])
+def get_agent_job_logs(
+    job_id: str,
+    current_user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the logs for a specific agent job.
+    """
+    job = crud.get_agent_job(db, job_id=job_id, owner_id=str(current_user.id))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job.logs
+
+@router.post("/jobs/{job_id}/submit_human_input", response_model=schemas.ArcanaAgentJobResponse)
+async def submit_human_input(
+    job_id: str,
+    human_input_request: schemas.HumanInputRequest,
+    background_tasks: BackgroundTasks,
+    current_user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Submits human input to an agent job that is awaiting human input and resumes its execution.
+    """
+    job = crud.get_agent_job(db, job_id=job_id, owner_id=str(current_user.id))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "awaiting_human_input":
+        raise HTTPException(status_code=400, detail="Job is not awaiting human input.")
+
+    # Add human input to the job's message history
+    human_message = {"role": "user", "content": human_input_request.human_input}
+    updated_messages = job.message_history if job.message_history else []
+    updated_messages.append(human_message)
+    
+    crud.add_agent_job_log(db, job_id, "human_input", human_input_request.human_input)
+    crud.update_agent_job_status(db, job_id, "resumed", message_history=updated_messages) # Update status and save messages
+
+    # Re-trigger the agent's execution task
+    # We need to pass the original request and the updated message history
+    if not job.original_request:
+        raise HTTPException(status_code=500, detail="Original request not found for resuming job.")
+
+    background_tasks.add_task(
+        agent_orchestration_service.execute_agent_task,
+        db,
+        current_user,
+        job.original_request, # Pass the original request
+        job.id,
+        initial_messages=updated_messages, # Pass the updated message history
+        original_request_obj=job.original_request # Pass original request object
+    )
+    
+    # Fetch the updated job to return
+    updated_job = crud.get_agent_job(db, job_id=job_id, owner_id=str(current_user.id))
+    return updated_job
+
+@router.post("/jobs/{job_id}/resume")
+async def resume_agent_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Resume a job that is awaiting human input.
+    This endpoint is now deprecated in favor of submit_human_input.
+    """
+    raise HTTPException(status_code=400, detail="This endpoint is deprecated. Use /jobs/{job_id}/submit_human_input instead.")

@@ -119,49 +119,13 @@ export default function Dashboard() {
     },
   });
 
-  const { data: arcanaStatus, isLoading: isLoadingArcana, error: errorArcana } = useQuery({
-    queryKey: ['/api/arcana/status'],
-    queryFn: async () => {
-      const response = await fetch('/api/arcana/status');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    },
-  });
 
-  const { data: myntrixStatus, isLoading: isLoadingMyntrix, error: errorMyntrix } = useQuery({
-    queryKey: ['/api/myntrix/status'],
-    queryFn: async () => {
-      const response = await fetch('/api/myntrix/status');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    },
-  });
 
-  const { data: neosyntisStatus, isLoading: isLoadingNeosyntis, error: errorNeosyntis } = useQuery({
-    queryKey: ['/api/neosyntis/status'],
-    queryFn: async () => {
-      const response = await fetch('/api/neosyntis/status');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    },
-  });
 
-  const { data: cognisysStatus, isLoading: isLoadingCognisys, error: errorCognisys } = useQuery({
-    queryKey: ['/api/cognisys/status'],
-    queryFn: async () => {
-      const response = await fetch('/api/cognisys/status');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    },
-  });
+
+
+
+
 
   const quickActions = [
     {
@@ -190,10 +154,10 @@ export default function Dashboard() {
     },
   ];
 
-  const overallLoading = isLoading || isLoadingArcana || isLoadingMyntrix || isLoadingNeosyntis || isLoadingCognisys ||
+  const overallLoading = isLoading ||
                          openNeosyntisLabMutation.isPending || startArcanaChatMutation.isPending ||
                          deployMyntrixModelMutation.isPending || manageMyntrixAgentsMutation.isPending;
-  const overallError = error || errorArcana || errorMyntrix || errorNeosyntis || errorCognisys ||
+  const overallError = error ||
                        openNeosyntisLabMutation.isError || startArcanaChatMutation.isError ||
                        deployMyntrixModelMutation.isError || manageMyntrixAgentsMutation.isError;
 
@@ -206,8 +170,8 @@ export default function Dashboard() {
   }
 
   // Ensure all data is available before proceeding
-  if (!systemStatus || !arcanaStatus || !myntrixStatus || !neosyntisStatus || !cognisysStatus) {
-    return <div className="p-6 text-center text-red-500">Missing some dashboard data.</div>;
+  if (!systemStatus) {
+    return <div className="p-6 text-center text-red-500">Missing system status data.</div>;
   }
 
   const modules = [
@@ -216,11 +180,11 @@ export default function Dashboard() {
       name: 'ARCANA',
       icon: Terminal,
       description: 'Cognitive Chat & Shell System',
-      status: arcanaStatus.status,
+      status: systemStatus.arcana.status,
       metrics: [
-        { label: 'Active Chats', value: arcanaStatus.activeChats },
-        { label: 'Messages', value: arcanaStatus.messagesProcessed },
-        { label: 'Avg Response', value: arcanaStatus.avgResponseTime },
+        { label: 'Active Chats', value: systemStatus.arcana.activeChats },
+        { label: 'Messages', value: systemStatus.arcana.messagesProcessed },
+        { label: 'Avg Response', value: systemStatus.arcana.avgResponseTime },
       ],
       path: '/dashboard/arcana',
     },
@@ -229,11 +193,11 @@ export default function Dashboard() {
       name: 'MYNTRIX',
       icon: Bot,
       description: 'AI Core & Device Control',
-      status: myntrixStatus.status,
+      status: systemStatus.myntrix.status,
       metrics: [
-        { label: 'Active Agents', value: myntrixStatus.activeAgents },
-        { label: 'Jobs Completed', value: myntrixStatus.jobsCompleted },
-        { label: 'Devices', value: myntrixStatus.devicesConnected },
+        { label: 'Active Agents', value: systemStatus.myntrix.activeAgents },
+        { label: 'Jobs Completed', value: systemStatus.myntrix.jobsCompleted },
+        { label: 'Devices', value: systemStatus.myntrix.devicesConnected },
       ],
       path: '/dashboard/myntrix',
     },
@@ -242,11 +206,11 @@ export default function Dashboard() {
       name: 'NEOSYNTIS',
       icon: Search,
       description: 'Research & Workflow Lab',
-      status: neosyntisStatus.status,
+      status: systemStatus.neosyntis.status,
       metrics: [
-        { label: 'Active Workflows', value: neosyntisStatus.activeWorkflows },
-        { label: 'Datasets', value: neosyntisStatus.datasetsManaged },
-        { label: 'Search Queries', value: neosyntisStatus.searchQueriesProcessed },
+        { label: 'Active Workflows', value: systemStatus.neosyntis.activeWorkflows },
+        { label: 'Datasets', value: systemStatus.neosyntis.datasetsManaged },
+        { label: 'Search Queries', value: systemStatus.neosyntis.searchQueriesProcessed },
       ],
       path: '/dashboard/neosyntis',
     },
@@ -255,11 +219,11 @@ export default function Dashboard() {
       name: 'COGNISYS',
       icon: Network,
       description: 'Multimodel Orchestration',
-      status: cognisysStatus.status,
+      status: systemStatus.cognisys.status,
       metrics: [
-        { label: 'Active Models', value: cognisysStatus.modelsActive },
-        { label: 'Routing Rules', value: cognisysStatus.routingRules },
-        { label: 'Requests Routed', value: cognisysStatus.requestsRouted },
+        { label: 'Active Models', value: systemStatus.cognisys.modelsActive },
+        { label: 'Routing Rules', value: systemStatus.cognisys.routingRules },
+        { label: 'Requests Routed', value: systemStatus.cognisys.requestsRouted },
       ],
       path: '/dashboard/cognisys',
     },

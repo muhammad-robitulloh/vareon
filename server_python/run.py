@@ -4,41 +4,57 @@ import sys
 import os
 import logging
 import atexit
-import select # For non-blocking I/O
+import select
 import time
-from dotenv import load_dotenv # Import load_dotenv
+from dotenv import load_dotenv
 
-# --- Logging ---
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    level=logging.INFO
-)
+# --- Basic Logging Setup ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Global list to store subprocess.Popen objects
+# --- Global list to keep track of running subprocesses ---
 running_processes = []
 
 def cleanup_processes():
-    """Terminates all background processes started by this script."""
-    logger.info("Initiating cleanup of background processes...")
+    """Ensure all child processes are terminated on exit."""
+    logger.info("Shutting down subprocesses...")
     for proc in running_processes:
-        if proc.poll() is None: # Check if process is still running
-            logger.info(f"Terminating process with PID: {proc.pid}")
-            proc.terminate()
+        if proc.poll() is None:  # If the process is still running
             try:
-                proc.wait(timeout=5) # Wait for process to terminate
+                proc.terminate()
+                proc.wait(timeout=5)
+                logger.info(f"Terminated process with PID: {proc.pid}")
             except subprocess.TimeoutExpired:
-                logger.warning(f"Process {proc.pid} did not terminate gracefully, killing it.")
                 proc.kill()
-    logger.info("All background processes cleaned up.")
+                logger.warning(f"Forcefully killed process with PID: {proc.pid}")
+            except Exception as e:
+                logger.error(f"Error during cleanup of process {proc.pid}: {e}")
+    # Special cleanup for gunicorn parent process if it exists
+    try:
+        # This is a bit of a hack, but gunicorn can be stubborn
+        import psutil # Import here to avoid dependency if not needed
+        if any("gunicorn" in p.name() for p in psutil.process_iter()):
+             os.system("pkill gunicorn")
+             logger.info("Attempted to clean up any stray gunicorn processes.")
+    except NameError: # psutil might not be installed
+        pass
+    except Exception as e:
+        logger.error(f"Error during gunicorn cleanup: {e}")
 
-# Register the cleanup function to run on script exit
+
+# Register the cleanup function to be called on script exit
 atexit.register(cleanup_processes)
+
 
 def main():
     # Load environment variables from .env file
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    load_dotenv(os.path.join(script_dir, '.env')) # Explicitly load .env
+    dotenv_path = os.path.join(script_dir, '.env')
+    if os.path.exists(dotenv_path):
+        load_dotenv(dotenv_path)
+        logger.info(f"Loaded environment variables from {dotenv_path}")
+    else:
+        logger.warning(f".env file not found at {dotenv_path}. Proceeding with system environment variables.")
 
     parser = argparse.ArgumentParser(description="Vareon FastAPI Backend Runner")
     parser.add_argument("--dev", action="store_true", help="Run the development server with uvicorn.")
@@ -99,20 +115,24 @@ def main():
         new_env["DATASET_STORAGE_DIR"] = os.path.join(script_dir, 'data', 'neosyntis_datasets')
 
         try:
-                        backend_process = subprocess.Popen(
-                            [
-                                sys.executable, "-m", "uvicorn",
-                                "server_python.main:app",
-                                "--host", args.host,
-                                "--port", str(args.port)
-                            ],
-                            cwd=script_dir,
-                            env=new_env, # Pass current environment variables
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE
-                        )
-                        running_processes.append(backend_process)
-                        logger.info(f"Python backend started with PID: {backend_process.pid}")
+            backend_process = subprocess.Popen(
+                [
+                    sys.executable, "-m", "uvicorn",
+                    "server_python.main:app",
+                    "--host", args.host,
+                    "--port", str(args.port),
+                    "--reload" # Added for development convenience
+                ],
+                cwd=script_dir,
+                env=new_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True, # Decode stdout/stderr as text
+                bufsize=1, # Line-buffered
+                universal_newlines=True # Ensure text mode works across platforms
+            )
+            running_processes.append(backend_process)
+            logger.info(f"Python backend started with PID: {backend_process.pid}")
 
         except Exception as e:
             logger.error(f"Failed to start Python backend: {e}")
@@ -129,72 +149,79 @@ def main():
         logger.info("\nPress Ctrl+C to stop all servers.")
 
         # --- Stream logs from subprocesses ---
-        pipes = {}
-        if backend_process:
-            pipes[backend_process.stdout.fileno()] = (backend_process.stdout, "[Backend]")
-            pipes[backend_process.stderr.fileno()] = (backend_process.stderr, "[Backend ERROR]")
+        # Make stdout and stderr non-blocking
+        os.set_blocking(backend_process.stdout.fileno(), False)
+        os.set_blocking(backend_process.stderr.fileno(), False)
 
         try:
-            while running_processes:
-                # Check if any process has exited
-                for proc in list(running_processes): # Iterate over a copy
-                    if proc.poll() is not None: # Process has exited
-                        stderr_output = proc.stderr.read().decode('utf-8')
-                        if stderr_output:
-                            logger.error(f"Backend process (PID: {proc.pid}) exited with status {proc.poll()}. Stderr:\n{stderr_output}")
-                        else:
-                            logger.error(f"Backend process (PID: {proc.pid}) exited with status {proc.poll()}. No stderr output.")
-                        running_processes.remove(proc) # Remove the exited process
-                        if not running_processes:
-                            break
+            while backend_process.poll() is None:
+                # Check stdout
+                stdout_line = backend_process.stdout.readline()
+                if stdout_line:
+                    logger.info(f"[Backend] {stdout_line.strip()}")
 
-                if not running_processes:
-                    break
+                # Check stderr
+                stderr_line = backend_process.stderr.readline()
+                if stderr_line:
+                    # Uvicorn often logs INFO to stderr, so we check for that
+                    if "INFO:" in stderr_line:
+                        logger.info(f"[Backend] {stderr_line.strip()}")
+                    else:
+                        logger.error(f"[Backend ERROR] {stderr_line.strip()}")
 
-                # Use select to wait for data on any pipe
-                readable_fds = list(pipes.keys())
-                rlist, _, _ = select.select(readable_fds, [], [], 0.1) # 0.1 second timeout
+                time.sleep(0.1) # Prevent busy-waiting
 
-                for fd in rlist:
-                    stream, prefix = pipes[fd]
-                    line = stream.readline() # Read a line
-                    if line:
-                        decoded_line = line.decode('utf-8').strip()
-                        # Special handling for Uvicorn's INFO messages from stderr
-                        # Uvicorn often logs INFO to stderr, which we don't want to label as ERROR
-                        if prefix == "[Backend ERROR]" and "INFO:" in decoded_line:
-                            logger.info(f"[Backend] {decoded_line}") # Log as INFO
-                        else:
-                            logger.info(f"{prefix} {decoded_line}")
-                    
         except KeyboardInterrupt:
             logger.info("Ctrl+C detected. Initiating graceful shutdown.")
-            # atexit.register will handle cleanup_processes
             sys.exit(0)
         except Exception as e:
             logger.error(f"An error occurred during log streaming: {e}")
             sys.exit(1)
+        finally:
+            # This block will run when the loop terminates, either by process exit or error
+            if backend_process.poll() is not None:
+                logger.warning(f"Backend process exited with code {backend_process.poll()}.")
+                # Drain any remaining output
+                for line in backend_process.stdout:
+                    logger.info(f"[Backend] {line.strip()}")
+                for line in backend_process.stderr:
+                    logger.error(f"[Backend ERROR] {line.strip()}")
+
 
     elif args.prod:
         logger.info(f"Starting production server with gunicorn on http://{args.host}:{args.port}")
+        # In production, we want gunicorn to be the main process to allow for easy management.
+        # We use os.execvpe to replace the current Python script with the gunicorn process.
+        # This means the Python script will no longer be running, and gunicorn takes over.
+        # atexit cleanup will NOT run in this case, which is fine because gunicorn manages its workers.
+        
+        # Set up environment
+        new_env = os.environ.copy()
+        new_env["PYTHONPATH"] = project_root + os.pathsep + new_env.get("PYTHONPATH", "")
+        new_env["DATASET_STORAGE_DIR"] = os.path.join(script_dir, 'data', 'neosyntis_datasets')
+
+        gunicorn_executable = "gunicorn" # Assumes gunicorn is in the system's PATH
+
+        # Command and arguments for gunicorn
+        gunicorn_args = [
+            gunicorn_executable,
+            '--workers', str(args.workers),
+            '--bind', f'{args.host}:{args.port}',
+            '--worker-class', 'uvicorn.workers.UvicornWorker', # Use uvicorn workers for async performance
+            'server_python.main:app',
+        ]
+        
         try:
-            subprocess.run(
-                [
-                    'gunicorn',
-                    '--workers',
-                    str(args.workers),
-                    '--bind',
-                    f'{args.host}:{args.port}',
-                    'server_python.main:app',
-                ],
-                check=True,
-            )
-        except subprocess.CalledProcessError as e:
+            logger.info(f"Executing command: {' '.join(gunicorn_args)}")
+            # Replace the current process with gunicorn
+            os.execvpe(gunicorn_executable, gunicorn_args, new_env)
+        except FileNotFoundError:
+            logger.error("Gunicorn not found. Please make sure it's installed (pip install gunicorn uvicorn).")
+            sys.exit(1)
+        except Exception as e:
             logger.error(f"Failed to start gunicorn: {e}")
             sys.exit(1)
-        except FileNotFoundError:
-            logger.error("Gunicorn not found. Please make sure it's installed (pip install gunicorn).")
-            sys.exit(1)
+
     else:
         parser.print_help()
         sys.exit(1)

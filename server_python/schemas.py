@@ -276,3 +276,36 @@ class TerminalCommandHistory(TerminalCommandHistoryCreate):
 
     class Config:
         orm_mode = True
+
+class SystemStatusModule(BaseModel):
+    status: str
+    uptime: Optional[str] = None
+    activeChats: Optional[int] = 0
+    messagesProcessed: Optional[int] = 0
+    avgResponseTime: Optional[str] = None
+    activeAgents: Optional[int] = 0
+    jobsCompleted: Optional[int] = 0
+    devicesConnected: Optional[int] = 0
+    activeWorkflows: Optional[int] = 0
+    datasetsManaged: Optional[int] = 0
+    searchQueriesProcessed: Optional[int] = 0
+    modelsActive: Optional[int] = 0
+    routingRules: Optional[int] = 0
+    requestsRouted: Optional[int] = 0
+    cpu_percent: Optional[float] = 0.0
+    memory_percent: Optional[float] = 0.0
+    memory_total: Optional[int] = 0
+    memory_available: Optional[int] = 0
+    system_metrics_mocked: Optional[bool] = False
+    system_metrics_reason: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+class SystemStatus(BaseModel):
+    arcana: SystemStatusModule
+    myntrix: SystemStatusModule
+    neosyntis: SystemStatusModule
+    cognisys: SystemStatusModule
+    mocked: Optional[bool] = False
+    reason: Optional[str] = None

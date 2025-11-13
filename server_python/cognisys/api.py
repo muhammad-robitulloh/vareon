@@ -8,6 +8,9 @@ from server_python.auth import get_current_user, PermissionChecker
 from . import crud, schemas, llm_interaction
 from .llm_interaction import process_chat_request
 
+import os
+from server_python.terminal.service import TerminalService
+
 router = APIRouter()
 
 ### LLM Provider Management ###
@@ -48,6 +51,12 @@ async def test_llm_provider_connection(provider_id: str, current_user: DBUser = 
     db_provider = crud.get_llm_provider(db, provider_id=provider_id)
     if db_provider is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="LLM Provider not found")
+
+    if not db_provider.api_key_encrypted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key is not set for this provider. Please edit the provider to set a valid API key before testing the connection."
+        )
 
     api_key = crud.decrypt_api_key(db_provider.api_key_encrypted)
     
@@ -153,7 +162,22 @@ def delete_routing_rule(rule_id: str, current_user: DBUser = Depends(get_current
 
 @router.post("/chat", response_model=schemas.ChatResponse)
 async def chat_with_cognisys(chat_request: schemas.ChatRequest, current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    response_data = await llm_interaction.process_chat_request(db, current_user, chat_request.prompt, session_data={})
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Instantiate TerminalService for this request
+    # For a non-interactive chat, we can use a dummy session_id and the user's actual ID
+    # The project_root should be the base directory where commands are expected to run
+    project_root = os.getcwd() # Get the current working directory as project root
+    terminal_service = TerminalService(session_id=str(current_user.id), user_id=str(current_user.id))
+
+    session_data = {"terminal": terminal_service}
+
+    response_data = await llm_interaction.process_chat_request(db, current_user, chat_request.prompt, session_data=session_data)
     return schemas.ChatResponse(**response_data)
 
 @router.post("/detect-intent", response_model=schemas.IntentDetectionResponse)
@@ -166,3 +190,36 @@ async def detect_user_intent(
     Detects the intent of the user's prompt using an LLM.
     """
     return await llm_interaction.detect_intent(db, current_user, request.prompt)
+
+### System Prompt Management ###
+
+@router.post("/system-prompts/", response_model=schemas.SystemPromptResponse, status_code=status.HTTP_201_CREATED)
+def create_system_prompt(prompt: schemas.SystemPromptCreate, current_user: DBUser = Depends(PermissionChecker(["admin_access"])), db: Session = Depends(get_db)):
+    db_prompt = crud.create_system_prompt(db=db, prompt=prompt)
+    return db_prompt
+
+@router.get("/system-prompts/", response_model=List[schemas.SystemPromptResponse])
+def read_system_prompts(skip: int = 0, limit: int = 100, current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    prompts = crud.get_system_prompts(db, skip=skip, limit=limit)
+    return prompts
+
+@router.get("/system-prompts/{prompt_id}", response_model=schemas.SystemPromptResponse)
+def read_system_prompt(prompt_id: str, current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_prompt = crud.get_system_prompt(db, prompt_id=prompt_id)
+    if db_prompt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="System Prompt not found")
+    return db_prompt
+
+@router.put("/system-prompts/{prompt_id}", response_model=schemas.SystemPromptResponse)
+def update_system_prompt(prompt_id: str, prompt: schemas.SystemPromptUpdate, current_user: DBUser = Depends(PermissionChecker(["admin_access"])), db: Session = Depends(get_db)):
+    db_prompt = crud.update_system_prompt(db, prompt_id=prompt_id, prompt=prompt)
+    if db_prompt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="System Prompt not found")
+    return db_prompt
+
+@router.delete("/system-prompts/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_system_prompt(prompt_id: str, current_user: DBUser = Depends(PermissionChecker(["admin_access"])), db: Session = Depends(get_db)):
+    db_prompt = crud.delete_system_prompt(db, prompt_id=prompt_id)
+    if db_prompt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="System Prompt not found")
+    return {"ok": True}

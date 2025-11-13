@@ -1,25 +1,100 @@
+import logging
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 from datetime import datetime
 import json
-from encryption_utils import encrypt_api_key, decrypt_api_key
+from server_python.encryption_utils import encrypt_api_key, decrypt_api_key, InvalidToken
 
 from . import schemas # Add this import
 
-from server_python.database import LLMProvider, LLMModel, RoutingRule, RoutingRule as DBRoutingRule # Changed from ..database
-from .schemas import LLMProviderCreate, LLMProviderUpdate, LLMModelCreate, LLMModelUpdate, RoutingRuleCreate, RoutingRuleUpdate
+from server_python.database import LLMProvider, LLMModel, RoutingRule, RoutingRule as DBRoutingRule, SystemPrompt # Changed from ..database
+from .schemas import LLMProviderCreate, LLMProviderUpdate, LLMModelCreate, LLMModelUpdate, RoutingRuleCreate, RoutingRuleUpdate, SystemPromptCreate, SystemPromptUpdate
+
+logger = logging.getLogger(__name__)
+
+# ... (existing code) ...
+
+### System Prompt CRUD Operations ###
+
+def get_system_prompt(db: Session, prompt_id: str):
+    return db.query(SystemPrompt).filter(SystemPrompt.id == prompt_id).first()
+
+def get_system_prompt_by_name(db: Session, name: str):
+    return db.query(SystemPrompt).filter(SystemPrompt.name == name).first()
+
+def get_system_prompts(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(SystemPrompt).offset(skip).limit(limit).all()
+
+def create_system_prompt(db: Session, prompt: SystemPromptCreate):
+    db_prompt = SystemPrompt(
+        id=str(uuid.uuid4()),
+        name=prompt.name,
+        content=prompt.content,
+        description=prompt.description
+    )
+    db.add(db_prompt)
+    db.commit()
+    db.refresh(db_prompt)
+    return db_prompt
+
+def update_system_prompt(db: Session, prompt_id: str, prompt: SystemPromptUpdate):
+    db_prompt = get_system_prompt(db, prompt_id)
+    if db_prompt:
+        if prompt.name is not None:
+            db_prompt.name = prompt.name
+        if prompt.content is not None:
+            db_prompt.content = prompt.content
+        if prompt.description is not None:
+            db_prompt.description = prompt.description
+        db_prompt.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(db_prompt)
+    return db_prompt
+
+def delete_system_prompt(db: Session, prompt_id: str):
+    db_prompt = get_system_prompt(db, prompt_id)
+    if db_prompt:
+        db.delete(db_prompt)
+        db.commit()
+    return db_prompt
 
 ### LLM Provider CRUD Operations ###
 
+def mask_api_key(api_key: str) -> str:
+    if not api_key:
+        return ""
+    if len(api_key) <= 8:
+        return "********"
+    return api_key[:4] + "..." + api_key[-4:]
+
 def get_llm_provider(db: Session, provider_id: str):
-    return db.query(LLMProvider).filter(LLMProvider.id == provider_id).first()
+    db_provider = db.query(LLMProvider).filter(LLMProvider.id == provider_id).first()
+    if db_provider:
+        try:
+            decrypted_key = decrypt_api_key(db_provider.api_key_encrypted)
+            db_provider.masked_api_key = mask_api_key(decrypted_key)
+        except InvalidToken:
+            db_provider.masked_api_key = "Invalid/Expired Key"
+        except Exception:
+            db_provider.masked_api_key = "Error Masking Key"
+    return db_provider
 
 def get_llm_providers(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(LLMProvider).offset(skip).limit(limit).all()
+    providers = db.query(LLMProvider).offset(skip).limit(limit).all()
+    for provider in providers:
+        try:
+            decrypted_key = decrypt_api_key(provider.api_key_encrypted)
+            provider.masked_api_key = mask_api_key(decrypted_key)
+        except InvalidToken:
+            provider.masked_api_key = "Invalid/Expired Key"
+        except Exception:
+            provider.masked_api_key = "Error Masking Key"
+    return providers
 
 def create_llm_provider(db: Session, provider: LLMProviderCreate):
     encrypted_api_key = encrypt_api_key(provider.api_key)
+    logger.info(f"Creating LLM provider '{provider.name}'. API key encrypted: {bool(encrypted_api_key)}")
     db_provider = LLMProvider(
         id=str(uuid.uuid4()),
         name=provider.name,
@@ -46,6 +121,7 @@ def update_llm_provider(db: Session, provider_id: str, provider: LLMProviderUpda
             db_provider.organization_id = provider.organization_id
         if provider.api_key is not None:
             db_provider.api_key_encrypted = encrypt_api_key(provider.api_key)
+            logger.info(f"Updating LLM provider '{db_provider.name}'. API key encrypted: {bool(db_provider.api_key_encrypted)}")
         db_provider.updated_at = datetime.utcnow()
         db.commit()
     return db_provider

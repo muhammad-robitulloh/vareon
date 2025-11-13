@@ -53,7 +53,7 @@ export default function TerminalTab() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const accessToken = localStorage.getItem("access_token");
     // Connect to the new orchestrator endpoint
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws-api/ws/arcana/${id}?token=${accessToken}`);
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/shell/${id}?token=${accessToken}`);
 
     ws.onopen = () => {
       console.log(`Orchestrator WebSocket connected for terminal ${id}`);

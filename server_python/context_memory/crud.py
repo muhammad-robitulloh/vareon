@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 import uuid
 
-from database import ContextMemory as DBContextMemory
+from server_python.database import ContextMemory as DBContextMemory
 from . import schemas
 
 CONTEXT_KEY_PREFIXES = {

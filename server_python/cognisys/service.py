@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 
-from database import User as DBUser
+from server_python.database import User as DBUser
 from . import llm_interaction
 
 class ChatService:

@@ -16,11 +16,11 @@ import stat # Added this line
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from main import app, get_db
-from database import Base, User, Workflow, Dataset, MLModel, TrainingJob, Permission, Role, TelemetryData
+from server_python.database import Base, User, Workflow, Dataset, MLModel, TrainingJob, Permission, Role, TelemetryData
 from auth import get_password_hash, PermissionChecker, get_current_user
 
 # Setup test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test_neosyntis.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
@@ -29,13 +29,18 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(name="db_session")
 def db_session_fixture():
+    # Drop all tables before creating them to ensure a clean slate and updated schema
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
+    connection = engine.connect()
+    transaction = connection.begin()
+    db = TestingSessionLocal(bind=connection)
     try:
         yield db
     finally:
         db.close()
-        Base.metadata.drop_all(bind=engine)
+        transaction.rollback()
+        connection.close()
 
 @pytest.fixture(name="client")
 def client_fixture(db_session):
@@ -49,17 +54,20 @@ def client_fixture(db_session):
 
 @pytest.fixture(name="test_user")
 def test_user_fixture(db_session):
-    hashed_password = get_password_hash("testpassword")
-    user = User(id="testuser123", username="testuser", email="test@example.example.com", hashed_password=hashed_password, is_verified=True)
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
+    user_id = "d228678f-7e76-47ed-aa00-be9470c0ce79" # Hardcoded ID
+    user = db_session.query(User).filter(User.id == user_id).first()
+    if not user:
+        hashed_password = get_password_hash("testpassword")
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password=hashed_password, is_verified=True)
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
     return user
 
 @pytest.fixture(name="admin_user")
 def admin_user_fixture(db_session):
     hashed_password = get_password_hash("adminpassword")
-    admin = User(id="adminuser123", username="adminuser", email="admin@example.com", hashed_password=hashed_password, is_verified=True)
+    admin = User(id=str(uuid.uuid4()), username="adminuser", email="admin@example.com", hashed_password=hashed_password, is_verified=True)
     db_session.add(admin) # Add admin first
     db_session.commit() # Commit admin to get an ID
     db_session.refresh(admin) # Refresh admin to ensure it's tracked
@@ -251,7 +259,7 @@ def test_get_workflow_status(client, auth_headers, db_session, test_user):
 def test_upload_dataset(client, auth_headers, test_user, mocker: MockerFixture):
     # Mock storage_service.save_dataset_file
     mocker.patch(
-        "neosyntis.storage_service.save_dataset_file",
+        "server_python.neosyntis.api.storage_service.save_dataset_file",
         return_value="/path/to/mock/dataset.csv"
     )
     # Mock file object

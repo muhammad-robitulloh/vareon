@@ -12,6 +12,8 @@ class ArcanaAgentBase(BaseModel):
     objective: Optional[str] = Field(None, description="The primary objective or goal for the agent, especially in autonomous mode.")
     status: str = Field("idle", description="The current status of the agent (e.g., 'idle', 'running', 'stopped').")
     configuration: Optional[Dict[str, Any]] = Field(None, description="JSON field for agent-specific configuration.")
+    target_repo_path: Optional[str] = Field(None, description="The local path of the Git repository the agent should operate on.")
+    target_branch: Optional[str] = Field(None, description="The Git branch the agent should operate on.")
 
 class ArcanaAgentCreate(ArcanaAgentBase):
     pass
@@ -23,6 +25,8 @@ class ArcanaAgentUpdate(BaseModel):
     objective: Optional[str] = None
     status: Optional[str] = None
     configuration: Optional[Dict[str, Any]] = None
+    target_repo_path: Optional[str] = None
+    target_branch: Optional[str] = None
 
 class ArcanaAgentResponse(ArcanaAgentBase):
     id: str
@@ -84,10 +88,13 @@ class ReasoningResponse(BaseModel):
     success: bool = Field(True, description="Indicates if reasoning generation was successful.")
     error_message: Optional[str] = Field(None, description="Error message if reasoning generation failed.")
 
+from server_python.git_service.schemas import GitDiffRequest, GitDiffResponse # Import Git schemas
+
 # --- File Operations Schemas ---
 class FileOperationRequest(BaseModel):
-    action: Literal["read", "write", "delete", "list", "create_directory"] = Field(..., description="The file operation to perform.")
+    action: Literal["read", "write", "delete", "list", "create_directory", "rename"] = Field(..., description="The file operation to perform.")
     path: str = Field(..., description="The path to the file or directory.")
+    new_path: Optional[str] = Field(None, description="The new path for 'rename' operation.")
     content: Optional[str] = Field(None, description="Content to write for 'write' operation.")
     recursive: bool = Field(False, description="For 'list' or 'delete' operations, whether to operate recursively.")
 
@@ -105,11 +112,81 @@ class FileOperationResponse(BaseModel):
     file_list: Optional[List[FileInfo]] = Field(None, description="List of files/directories for 'list' operation.")
     error_message: Optional[str] = Field(None, description="Error message if the operation failed.")
 
+# --- Git Operations Tool Schema ---
+# This schema is for the agent to call the git_get_diff tool
+GIT_GET_DIFF_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "git_get_diff",
+        "description": "Generates a diff of changes in the Git repository. Can be used to see unstaged changes or changes to a specific file.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "local_path": {"type": "string", "description": "The local path of the Git repository."},
+                "path": {"type": "string", "description": "Optional: The path to a specific file to get the diff for. If not provided, gets diff for all unstaged changes."}
+            },
+            "required": ["local_path"]
+        }
+    }
+}
+
+# --- Test Running Tool Schema ---
+RUN_TESTS_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "run_tests",
+        "description": "Executes test commands within a specified repository path and returns the output.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "local_path": {"type": "string", "description": "The local path of the repository where tests should be run."},
+                "command": {"type": "string", "description": "The shell command to execute for running tests (e.g., 'pytest', 'npm test')."}
+            },
+            "required": ["local_path", "command"]
+        }
+    }
+}
+
+# --- Context Memory Tool Schemas ---
+STORE_CONTEXT_ITEM_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "store_context_item",
+        "description": "Stores a piece of information in the agent's long-term context memory, categorized by type.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item_type": {"type": "string", "enum": ["preference", "project", "conversation"], "description": "The category of the context item (e.g., 'preference', 'project', 'conversation')."},
+                "key": {"type": "string", "description": "A unique key or name for the context item within its type (e.g., 'Preferred Language', 'Project X Overview')."},
+                "value": {"type": "object", "description": "The actual content of the context item as a JSON object."}
+            },
+            "required": ["item_type", "key", "value"]
+        }
+    }
+}
+
+RETRIEVE_CONTEXT_ITEMS_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "retrieve_context_items",
+        "description": "Retrieves context items from the agent's long-term memory, optionally filtered by type and key.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item_type": {"type": "string", "enum": ["preference", "project", "conversation"], "description": "Optional: The category of context items to retrieve."},
+                "key": {"type": "string", "description": "Optional: A specific key of the context item to retrieve."}
+            }
+        }
+    }
+}
+
 # --- Agent Orchestration Schemas ---
 class AgentExecuteRequest(BaseModel):
     task_prompt: str = Field(..., description="The natural language prompt describing the task for the agent.")
     agent_id: str = Field(..., description="The ID of the Arcana Agent to execute the task.")
     context: Optional[str] = Field(None, description="Additional context for the agent's task.")
+    target_repo_path: Optional[str] = Field(None, description="The local path of the Git repository the agent should operate on.")
+    target_branch: Optional[str] = Field(None, description="The Git branch the agent should operate on.")
 
 class AgentExecuteResponse(BaseModel):
     agent_id: str = Field(..., description="The ID of the Arcana Agent that executed the task.")
@@ -117,3 +194,40 @@ class AgentExecuteResponse(BaseModel):
     output: Optional[str] = Field(None, description="The output or result of the agent's task.")
     actions_taken: Optional[List[str]] = Field(None, description="A list of actions the agent performed.")
     error_message: Optional[str] = Field(None, description="Error message if the execution failed.")
+
+# --- Agent Job & Log Schemas ---
+
+class ArcanaAgentJobLogResponse(BaseModel):
+    id: str
+    timestamp: datetime
+    log_type: str
+    content: str
+
+    class Config:
+        orm_mode = True
+
+class ArcanaAgentJobBase(BaseModel):
+    agent_id: str
+    status: str
+    goal: str
+
+class ArcanaAgentJobCreate(ArcanaAgentJobBase):
+    pass
+
+class ArcanaAgentJobResponse(ArcanaAgentJobBase):
+    id: str
+    owner_id: str
+    created_at: datetime
+    updated_at: datetime
+    ended_at: Optional[datetime] = None
+    final_output: Optional[str] = None
+    message_history: Optional[List[Dict[str, Any]]] = None # New: Stores JSON of LLM messages
+    original_request: Optional[AgentExecuteRequest] = None # New: Stores JSON of original AgentExecuteRequest
+    logs: List[ArcanaAgentJobLogResponse] = []
+
+    class Config:
+        orm_mode = True
+
+class HumanInputRequest(BaseModel):
+    human_input: str = Field(..., description="The message or clarification from the human user.")
+    context: Optional[str] = Field(None, description="Additional context provided by the human user.")

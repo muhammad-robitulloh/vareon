@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Input, Label } from '@/components/ui';
 import { useToast } from '@/hooks/use-toast';
-import { User as UserIcon, Mail, Lock, LogOut, Github } from 'lucide-react'; // Added LogOut and Github icons
-import { useAuth } from '@/hooks/use-auth'; // Import useAuth hook
-import { useLocation } from 'wouter'; // Import useLocation hook
+import { User as UserIcon, Mail, Lock, LogOut } from 'lucide-react'; // Removed Github icon
+import { useAuth } from '@/hooks/use-auth';
+import { useLocation } from 'wouter';
+import GithubSettingsTab from '@/components/dashboard/user-profile/GithubSettingsTab'; // Import GithubSettingsTab
 
 // Mock API call for fetching user data
 const fetchUserData = async () => {
@@ -33,15 +34,15 @@ const updateUserData = async (data: { username?: string; email?: string; passwor
 
 export default function UserProfile() {
   const { toast } = useToast();
-  const { logout } = useAuth(); // Get logout function from useAuth
-  const [, setLocation] = useLocation(); // Get setLocation for redirection
+  const { logout } = useAuth();
+  const [, setLocation] = useLocation();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isGithubConnected, setIsGithubConnected] = useState(false);
+  // const [isGithubConnected, setIsGithubConnected] = useState(false); // Removed
 
   useEffect(() => {
     setLoading(true);
@@ -222,27 +223,7 @@ export default function UserProfile() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Github className="h-5 w-5 text-primary" />
-            GitHub Integration
-          </CardTitle>
-          <CardDescription>Connect your GitHub account to use your own repositories with Arcana Agent.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isGithubConnected ? (
-            <div className="flex items-center justify-between">
-              <p>GitHub account connected.</p>
-              <Button variant="destructive" onClick={() => setIsGithubConnected(false)}>Disconnect</Button>
-            </div>
-          ) : (
-            <Button onClick={() => setIsGithubConnected(true)}>
-              <Github className="mr-2 h-4 w-4" /> Connect to GitHub
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      <GithubSettingsTab /> {/* Integrated GithubSettingsTab */}
 
       <Card>
         <CardHeader>

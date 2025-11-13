@@ -23,6 +23,7 @@ class LLMProviderUpdate(LLMProviderBase):
 
 class LLMProviderResponse(LLMProviderBase):
     id: str
+    masked_api_key: Optional[str] = None # New field for masked API key
     created_at: datetime
     updated_at: datetime
 
@@ -110,3 +111,25 @@ class IntentDetectionResponse(BaseModel):
     intent: str = Field(..., description="The detected intent (e.g., 'shell_command', 'code_generation', 'conversation', 'file_operation').")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score of the detected intent.")
     reasoning: Optional[str] = Field(None, description="Optional explanation for the detected intent.")
+
+# --- System Prompt Schemas ---
+class SystemPromptBase(BaseModel):
+    name: str
+    content: str
+    description: Optional[str] = None
+
+class SystemPromptCreate(SystemPromptBase):
+    pass
+
+class SystemPromptUpdate(SystemPromptBase):
+    name: Optional[str] = None
+    content: Optional[str] = None
+    description: Optional[str] = None
+
+class SystemPromptResponse(SystemPromptBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True

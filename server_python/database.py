@@ -4,7 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from typing import Optional, List
 import uuid # Import uuid
-from encryption_utils import encrypt_api_key
+from .encryption_utils import encrypt_api_key
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
 
@@ -199,7 +199,7 @@ class RoutingRule(Base):
     id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     owner_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     name = Column(String, index=True, nullable=False)
-    condition = Column(String, nullable=False)
+    condition = Column(Text, nullable=False)
     target_model = Column(String, nullable=False)
     priority = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -294,6 +294,20 @@ class TerminalCommandHistory(Base):
     output = Column(Text, nullable=True) # Truncated output
     session = relationship("TerminalSession", backref="command_history")
 
+class UserGitConfig(Base):
+    __tablename__ = "user_git_configs"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False, unique=True)
+    github_pat_encrypted = Column(String, nullable=True)
+    default_author_name = Column(String, nullable=True)
+    default_author_email = Column(String, nullable=True)
+    default_repo_url = Column(String, nullable=True)
+    default_local_path = Column(String, nullable=True)
+    default_branch = Column(String, default="main")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user = relationship("User", backref="git_config", uselist=False)
+
 class ArcanaAgent(Base):
     __tablename__ = "arcana_agents"
     id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
@@ -308,6 +322,40 @@ class ArcanaAgent(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     owner = relationship("User", backref="arcana_agents")
 
+class ArcanaAgentJob(Base):
+    __tablename__ = "arcana_agent_jobs"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    agent_id = Column(String(36), ForeignKey('arcana_agents.id'), nullable=False)
+    owner_id = Column(String(36), ForeignKey('users.id'), nullable=False)
+    status = Column(String, default="starting") # e.g., starting, planning, coding, testing, awaiting_human_input, completed, failed
+    goal = Column(Text, nullable=False)
+    message_history = Column(Text, nullable=True) # New: Stores JSON of LLM messages
+    original_request = Column(Text, nullable=True) # New: Stores JSON of original AgentExecuteRequest
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)
+    final_output = Column(Text, nullable=True)
+    agent = relationship("ArcanaAgent", backref="jobs")
+    owner = relationship("User", backref="arcana_agent_jobs")
+
+class ArcanaAgentJobLog(Base):
+    __tablename__ = "arcana_agent_job_logs"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String(36), ForeignKey('arcana_agent_jobs.id'), nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    log_type = Column(String, nullable=False) # e.g., 'thought', 'command', 'output', 'human_input_needed', 'error'
+    content = Column(Text, nullable=False)
+    job = relationship("ArcanaAgentJob", backref="logs")
+
+
+class SystemPrompt(Base):
+    __tablename__ = "system_prompts"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, unique=True, nullable=False)
+    content = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 # --- Database Utility Functions ---
 def get_db():
@@ -405,7 +453,7 @@ def populate_initial_llm_data(db: Session):
         openrouter_provider = LLMProvider(
             id=str(uuid.uuid4()),
             name="OpenRouter",
-            api_key_encrypted=encrypt_api_key("dummy_api_key"), # API key will be set via dashboard
+            api_key_encrypted="", # API key will be set via dashboard
             base_url="https://openrouter.ai/api/v1",
             enabled=True,
             organization_id=None
@@ -415,24 +463,40 @@ def populate_initial_llm_data(db: Session):
         db.refresh(openrouter_provider)
         print("Created default LLM Provider: OpenRouter")
 
-    # Check for and create default LLM Model (e.g., google/gemini-pro)
-    gemini_pro_model = db.query(LLMModel).filter(LLMModel.model_name == "google/gemini-pro").first()
-    if not gemini_pro_model:
-        gemini_pro_model = LLMModel(
+    # Create default intent detection system prompt
+    intent_prompt_name = "intent_detection_prompt"
+    default_intent_prompt = db.query(SystemPrompt).filter(SystemPrompt.name == intent_prompt_name).first()
+    if not default_intent_prompt:
+        default_intent_prompt_content = """You are an AI intent detection system. Your task is to classify user prompts into one of the following categories:
+- 'shell_command': The user wants to execute a command in a terminal or get a shell command.
+- 'code_generation': The user wants to generate code, get code examples, or debug code.
+- 'file_operation': The user wants to perform operations on files (create, read, write, delete, list, move, etc.).
+- 'conversation': The user is engaging in a general conversation, asking questions, or seeking information.
+- 'arcana_agent_management': The user is asking to create, list, update, or delete Arcana agents.
+- 'unknown': The intent cannot be clearly determined from the provided categories.
+
+Provide your response in a JSON format with the following keys:
+- 'intent': The detected intent category.
+- 'confidence': A float between 0.0 and 1.0 indicating your confidence in the detection.
+- 'reasoning': A brief explanation of why you chose this intent.
+
+Example JSON output:
+{"intent": "shell_command", "confidence": 0.95, "reasoning": "The prompt explicitly asks to 'run a command'."}
+{"intent": "code_generation", "confidence": 0.88, "reasoning": "The prompt mentions 'Python code' and 'function'."}
+{"intent": "conversation", "confidence": 0.70, "reasoning": "The prompt is a general greeting."}
+{"intent": "file_operation", "confidence": 0.90, "reasoning": "The prompt asks to 'create a new file'."}
+{"intent": "arcana_agent_management", "confidence": 0.92, "reasoning": "The prompt asks to 'list my agents'."}
+"""
+        db_default_intent_prompt = SystemPrompt(
             id=str(uuid.uuid4()),
-            provider_id=openrouter_provider.id,
-            model_name="google/gemini-pro",
-            type="chat",
-            is_active=True,
-            reasoning=True,
-            role="general",
-            max_tokens=4096,
-            cost_per_token=0.0001, # Placeholder value
+            name=intent_prompt_name,
+            content=default_intent_prompt_content,
+            description="Default system prompt for LLM-based intent detection."
         )
-        db.add(gemini_pro_model)
+        db.add(db_default_intent_prompt)
         db.commit()
-        db.refresh(gemini_pro_model)
-        print("Created default LLM Model: google/gemini-pro for OpenRouter")
+        db.refresh(db_default_intent_prompt)
+        print(f"Created default System Prompt: {intent_prompt_name}")
 
     # Add other default models as needed
     # For example, a default model for local LLMs if applicable

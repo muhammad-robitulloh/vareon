@@ -1,11 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button, Input, Card, CardContent, CardHeader, CardTitle, CardDescription, Label } from '@/components/ui';
-import { Mail, User, Lock, Loader2 } from "lucide-react";
+import { Mail, User, Lock, Loader2, Github, Chrome } from "lucide-react"; // Added Github and Chrome icons
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-
-const API_BASE_URL = ""; // Define your API base URL
 
 export default function AuthForm() {
   const [isLogin, setIsLogin] = useState(true);
@@ -13,11 +11,36 @@ export default function AuthForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation(); // Get location and setLocation from wouter
+
+  // --- Handle OAuth Callback ---
+  useEffect(() => {
+    const params = new URLSearchParams(location.split('?')[1]);
+    const oauthSuccess = params.get('oauth_success');
+    const token = params.get('token');
+    const error = params.get('error');
+
+    if (oauthSuccess === 'true' && token) {
+      localStorage.setItem("access_token", token);
+      toast({
+        title: "Login Successful",
+        description: "You have been logged in via OAuth.",
+        variant: "success",
+      });
+      setLocation("/dashboard", { replace: true }); // Redirect to dashboard and clean URL
+    } else if (oauthSuccess === 'false' && error) {
+      toast({
+        title: "OAuth Login Failed",
+        description: `Error: ${error}`,
+        variant: "destructive",
+      });
+      setLocation("/auth", { replace: true }); // Clean URL
+    }
+  }, [location, setLocation, toast]);
 
   const loginMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await fetch(`${API_BASE_URL}/api/token`, {
+      const response = await fetch(`/api/token`, { // Removed API_BASE_URL
         method: "POST",
         body: formData,
       });
@@ -47,7 +70,7 @@ export default function AuthForm() {
 
   const registerMutation = useMutation({
     mutationFn: async (userData: { email: string; username: string; password: string }) => {
-      const response = await fetch(`${API_BASE_URL}/api/register`, {
+      const response = await fetch(`/api/register`, { // Removed API_BASE_URL
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -87,6 +110,14 @@ export default function AuthForm() {
     } else {
       registerMutation.mutate({ email, username, password });
     }
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.href = `/api/auth/google/authorize`; // Removed API_BASE_URL
+  };
+
+  const handleGitHubLogin = () => {
+    window.location.href = `/api/auth/github/login/authorize`; // Removed API_BASE_URL
   };
 
   const isLoading = loginMutation.isPending || registerMutation.isPending;
@@ -144,6 +175,21 @@ export default function AuthForm() {
             {isLoading ? <Loader2 className="animate-spin" /> : (isLogin ? "Login" : "Sign Up")}
           </Button>
           
+          <div className="relative flex items-center py-5">
+            <div className="flex-grow border-t border-gray-400"></div>
+            <span className="flex-shrink mx-4 text-gray-400 text-sm">OR</span>
+            <div className="flex-grow border-t border-gray-400"></div>
+          </div>
+
+          <div className="space-y-3">
+            <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGoogleLogin}>
+              <Chrome className="h-5 w-5" /> Login with Google
+            </Button>
+            <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGitHubLogin}>
+              <Github className="h-5 w-5" /> Login with GitHub
+            </Button>
+          </div>
+
           <p className="text-center text-sm text-muted-foreground">
             {isLogin ? "Don't have an account?" : "Already have an account?"}
             <Button

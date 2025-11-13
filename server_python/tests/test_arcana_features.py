@@ -34,6 +34,7 @@ from server_python.main import app, get_db
 from server_python.database import Base, User, LLMProvider, LLMModel, ArcanaAgent
 from server_python.auth import get_password_hash, PermissionChecker, get_current_user
 from server_python.cognisys.crud import encrypt_api_key
+from server_python.arcana import crud
 
 # Setup test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_arcana_features.db" # Use a different DB file for arcana tests
@@ -403,13 +404,21 @@ async def mock_process_chat_request(*args, **kwargs):
 
 async def mock_call_llm_api_agent_tools(*args, **kwargs):
     messages = kwargs.get("messages", [])
-    # Simulate LLM deciding to call generate_code
+    print(f"DEBUG: mock_call_llm_api_agent_tools received messages: {messages}")
+    # Simulate LLM deciding to call generate_code or reflect
     if "generate python" in messages[-1]["content"].lower():
         return {"message": {"tool_calls": [{"id": "call_123", "function": {"name": "generate_code", "arguments": "{\"prompt\": \"hello world\", \"language\": \"python\"}"}}]}, "model_used": "tool-user-model"}
+    elif "plan and execute a task" in messages[-1]["content"].lower():
+        return {"message": {"tool_calls": [{"id": "call_456", "function": {"name": "reflect", "arguments": "{\"context\": \"Initial task: Plan and execute a task.\"}"}}]}, "model_used": "tool-user-model"}
     return {"message": {"content": "Agent did not call a tool."}, "model_used": "tool-user-model"}
 
-def test_execute_agent_task_chat_mode(client, auth_headers, db_session, test_user, mocker: MockerFixture):
-    mocker.patch("server_python.arcana.agent_orchestration_service.get_openrouter_completion", return_value="Agent chat response")
+import time
+
+# ... (other imports)
+
+def test_execute_agent_task_chat_mode(client, auth_headers, db_session, test_user, setup_llm_models, mocker: MockerFixture):
+    mocker.patch("server_python.arcana.agent_orchestration_service.call_llm_api", return_value={"message": {"content": "Chat mode execution completed."}})
+    mocker.patch("server_python.arcana.agent_orchestration_service.TerminalService")
     
     agent = ArcanaAgent(
         id=str(uuid.uuid4()), owner_id=str(test_user.id), name="ChattyAgent",
@@ -419,19 +428,33 @@ def test_execute_agent_task_chat_mode(client, auth_headers, db_session, test_use
     db_session.commit()
     db_session.refresh(agent)
 
+    # Initial request to start the job
     response = client.post(
         f"/api/arcana/agents/{agent.id}/execute",
         headers=auth_headers,
-        json={"agent_id": str(agent.id), "task_prompt": "Tell me a joke."}
+        json={"agent_id": str(agent.id), "task_prompt": "Tell me a joke.", "target_repo_path": "/tmp/test_repo"}
     )
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    assert response.json()["output"] == "Agent chat response"
-    assert "Chat response generated" in response.json()["actions_taken"][0]
+    job_data = response.json()
+    assert job_data["status"] == "starting"
+    assert job_data["agent_id"] == agent.id
+    job_id = job_data["id"]
+
+    # Poll for job completion
+    for _ in range(10): # Poll for a maximum of 10 seconds
+        time.sleep(1)
+        job_status_response = client.get(f"/api/arcana/jobs/{job_id}", headers=auth_headers)
+        if job_status_response.status_code == 200 and job_status_response.json()["status"] == "completed":
+            break
+    
+    final_job_status = client.get(f"/api/arcana/jobs/{job_id}", headers=auth_headers).json()
+    assert final_job_status["status"] == "completed"
+    assert "Chat mode execution completed." in final_job_status["final_output"]
+
 
 def test_execute_agent_task_tool_user_mode(client, auth_headers, db_session, test_user, setup_llm_models, mocker: MockerFixture):
     mocker.patch("server_python.arcana.agent_orchestration_service.call_llm_api", side_effect=mock_call_llm_api_agent_tools)
-    mocker.patch("server_python.arcana.code_generation_service.generate_code", return_value={"generated_code": "print('Mocked Code')", "success": True})
+    mocker.patch("server_python.arcana.agent_orchestration_service.TerminalService")
 
     agent = ArcanaAgent(
         id=str(uuid.uuid4()), owner_id=str(test_user.id), name="ToolAgent",
@@ -444,20 +467,32 @@ def test_execute_agent_task_tool_user_mode(client, auth_headers, db_session, tes
     response = client.post(
         f"/api/arcana/agents/{agent.id}/execute",
         headers=auth_headers,
-        json={"agent_id": str(agent.id), "task_prompt": "Generate python code for hello world."}
+        json={"agent_id": str(agent.id), "task_prompt": "Generate python code for hello world.", "target_repo_path": "/tmp/test_repo"}
     )
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    assert "Agent did not call a tool." in response.json()["output"]
+    job_data = response.json()
+    assert job_data["status"] == "starting"
+    job_id = job_data["id"]
+
+    # Poll for job completion
+    for _ in range(10):
+        time.sleep(1)
+        job_status_response = client.get(f"/api/arcana/jobs/{job_id}", headers=auth_headers)
+        if job_status_response.status_code == 200 and job_status_response.json()["status"] == "completed":
+            break
+            
+    final_job_status = client.get(f"/api/arcana/jobs/{job_id}", headers=auth_headers).json()
+    assert final_job_status["status"] == "completed"
+    assert "Agent did not call a tool." in final_job_status["final_output"]
 
 def test_execute_agent_task_autonomous_mode(client, auth_headers, db_session, test_user, setup_llm_models, mocker: MockerFixture):
     mocker.patch("server_python.arcana.agent_orchestration_service.call_llm_api", side_effect=mock_call_llm_api_agent_tools)
-    mocker.patch("server_python.arcana.reasoning_service.call_llm_api", return_value={
-        "message": {
-            "content": "{\"reasoning_trace\": [{\"step_number\": 1, \"description\": \"Mocked reasoning step.\", \"action\": \"None\", \"outcome\": \"None\"}], \"summary\": \"Mocked reasoning summary\"}"
-        }
-    })
-    m4 = mocker.patch("server_python.arcana.reasoning_service.generate_reasoning", return_value={"summary": "Mocked reasoning summary", "success": True, "reasoning_trace": []})
+    async def mock_reflect_side_effect(db, user, job_id, context):
+        print(f"DEBUG: mock_reflect_side_effect called for job_id: {job_id}")
+        crud.add_agent_job_log(db, job_id, "thought", "Reflection summary: Mocked reasoning summary")
+        return "Mocked reasoning summary"
+    mocker.patch("server_python.arcana.agent_orchestration_service.reflect", side_effect=mock_reflect_side_effect)
+    mocker.patch("server_python.arcana.agent_orchestration_service.TerminalService")
     agent = ArcanaAgent(
         id=str(uuid.uuid4()), owner_id=str(test_user.id), name="AutoAgent",
         persona="planner", mode="autonomous", status="idle", objective="complete tasks autonomously"
@@ -469,12 +504,27 @@ def test_execute_agent_task_autonomous_mode(client, auth_headers, db_session, te
     response = client.post(
         f"/api/arcana/agents/{agent.id}/execute",
         headers=auth_headers,
-        json={"agent_id": str(agent.id), "task_prompt": "Plan and execute a task."}
+        json={"agent_id": str(agent.id), "task_prompt": "Plan and execute a task.", "target_repo_path": "/tmp/test_repo"}
     )
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    assert "Generated reasoning: Mocked reasoning summary" in response.json()["actions_taken"][0]
-    assert "Agent did not call a tool." in response.json()["output"]    
+    job_data = response.json()
+    assert job_data["status"] == "starting"
+    job_id = job_data["id"]
+
+    # Poll for job completion
+    for _ in range(10):
+        time.sleep(1)
+        job_status_response = client.get(f"/api/arcana/jobs/{job_id}", headers=auth_headers)
+        if job_status_response.status_code == 200 and job_status_response.json()["status"] == "completed":
+            break
+            
+    final_job_status = client.get(f"/api/arcana/jobs/{job_id}", headers=auth_headers).json()
+    assert final_job_status["status"] == "completed"
+    # Check logs for actions
+    logs_response = client.get(f"/api/arcana/jobs/{job_id}/logs", headers=auth_headers)
+    logs = logs_response.json()
+    assert any("Reflection summary: Mocked reasoning summary" in log["content"] for log in logs)
+    assert "Agent did not call a tool." in final_job_status["final_output"]
 # Cleanup the test database and dataset/file_ops directories after tests run
 def teardown_module(module):
     import os
