@@ -299,6 +299,7 @@ class UserGitConfig(Base):
     id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey('users.id'), nullable=False, unique=True)
     github_pat_encrypted = Column(String, nullable=True)
+    github_app_installation_id = Column(Integer, nullable=True) # New column for GitHub App Installation ID
     default_author_name = Column(String, nullable=True)
     default_author_email = Column(String, nullable=True)
     default_repo_url = Column(String, nullable=True)

@@ -10,6 +10,7 @@ from server_python.database import get_db, User as DBUser, get_user_by_username_
 from server_python.auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash
 from server_python.encryption_utils import encrypt_api_key
 from server_python.git_service import crud as git_crud # Import git crud for UserGitConfig
+from server_python.git_service.schemas import UserGitConfigCreate # Import UserGitConfigCreate schema
 
 router = APIRouter()
 
@@ -18,7 +19,7 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/auth/callback/google") # Frontend callback URL
 
-GITHUB_REDIRECT_URI_BASE = os.getenv("GITHUB_REDIRECT_URI_BASE", "http://localhost:3000/auth/github/callback") # Unified callback URL
+GITHUB_REDIRECT_URI_BASE = os.getenv("GITHUB_REDIRECT_URI_BASE", "https://arcana.mrbtlhh.my.id/api/auth/github/callback") # Unified callback URL
 
 # --- GitHub OAuth Configuration (for login/signup) ---
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID") # Re-use from git_service.api
@@ -50,6 +51,7 @@ async def _handle_oauth_user(db: Session, email: str, username: str, provider: s
     )
 
     # Store provider-specific access token if provided (e.g., GitHub PAT)
+    needs_github_app_install = False
     if provider == "github" and access_token:
         encrypted_token = encrypt_api_key(access_token)
         db_config = git_crud.get_user_git_config(db, str(user.id))
@@ -58,7 +60,7 @@ async def _handle_oauth_user(db: Session, email: str, username: str, provider: s
             db.commit()
             db.refresh(db_config)
         else:
-            new_config_data = git_crud.schemas.UserGitConfigCreate(
+            new_config_data = UserGitConfigCreate(
                 github_pat=access_token, # Will be encrypted in crud
                 default_author_name=username,
                 default_author_email=email
@@ -66,8 +68,16 @@ async def _handle_oauth_user(db: Session, email: str, username: str, provider: s
             git_crud.create_user_git_config(db, str(user.id), new_config_data)
         print(f"AUDIT: GitHub PAT stored for user {user.username}")
 
-    # Redirect to frontend dashboard with Vareon access token
-    return RedirectResponse(f"{redirect_path}?token={vareon_access_token}&oauth_success=true")
+        # Check if GitHub App is installed
+        if not db_config or not db_config.github_app_installation_id:
+            needs_github_app_install = True
+    
+    # Always redirect to /auth, but pass the needs_github_app_install flag
+    redirect_url = f"{redirect_path}?token={vareon_access_token}&oauth_success=true"
+    if needs_github_app_install:
+        redirect_url += "&needs_github_app_install=true"
+    
+    return RedirectResponse(redirect_url)
 
 # --- Google OAuth Endpoints ---
 @router.get("/google/authorize")
@@ -201,10 +211,10 @@ async def github_callback(
         raise HTTPException(status_code=500, detail="Could not retrieve username from GitHub profile.")
 
     # Determine redirect path based on state
-    redirect_path = "/auth"
+    redirect_path = "/auth" # Redirect to auth page to let AuthForm handle token
     if state == "git_connect":
         redirect_path = "/dashboard/arcana?tab=git"
     elif state == "login":
-        redirect_path = "/auth"
+        redirect_path = "/auth" # Explicitly set for clarity
     
     return await _handle_oauth_user(db, email, username, "github", github_id, access_token=access_token, redirect_path=redirect_path)

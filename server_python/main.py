@@ -41,6 +41,7 @@ from server_python.orchestrator import main as orchestrator_app # Import the orc
 from server_python.context_memory import api as context_memory_api # Import the context_memory API router
 from server_python.git_service import api as git_api # Import the git_service API router
 from server_python import auth_oauth # Import the new auth_oauth router
+from server_python import github_app # Import the new github_app router
 
 app = FastAPI()
 
@@ -51,6 +52,7 @@ app.include_router(arcana_api.router, prefix="/api/arcana", tags=["Arcana"])
 app.include_router(context_memory_api.router, prefix="/api/context_memory", tags=["Context Memory"])
 app.include_router(git_api.router, prefix="/api/git", tags=["Git"])
 app.include_router(auth_oauth.router, prefix="/api/auth", tags=["OAuth"]) # Include the OAuth router
+app.include_router(github_app.router, prefix="/api/git", tags=["Git"]) # Include the GitHub App router
 app.mount("/ws-api", orchestrator_app.app)
 
 @app.on_event("startup")

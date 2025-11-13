@@ -9,6 +9,7 @@ class UserGitConfigBase(BaseModel):
     default_repo_url: Optional[str] = Field(None, description="Default GitHub repository URL.")
     default_local_path: Optional[str] = Field(None, description="Default local path for the repository.")
     default_branch: Optional[str] = Field("main", description="Default branch to work on.")
+    github_app_installation_id: Optional[int] = Field(None, description="GitHub App Installation ID.")
 
 class UserGitConfigCreate(UserGitConfigBase):
     pass
@@ -21,6 +22,7 @@ class UserGitConfigResponse(UserGitConfigBase):
     user_id: str
     github_pat: Optional[str] = Field(None, description="GitHub Personal Access Token (will be masked or omitted in response).")
     decrypted_github_pat: Optional[str] = Field(None, description="Decrypted GitHub Personal Access Token (only available internally).") # New field
+    github_app_installation_id: Optional[int] = Field(None, description="GitHub App Installation ID.")
     created_at: datetime
     updated_at: datetime
 

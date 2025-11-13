@@ -11,6 +11,7 @@ interface UserGitConfig {
   id: string;
   user_id: string;
   github_pat: string; // Masked or omitted in response
+  github_app_installation_id?: number;
   default_author_name?: string;
   default_author_email?: string;
   default_repo_url?: string;
@@ -70,16 +71,12 @@ const GithubSettingsTab: React.FC = () => {
     }
   }, [userGitConfig]);
 
-  // --- Handle GitHub OAuth Callback ---
+  // --- Handle GitHub App Installation Callback ---
   useEffect(() => {
     const params = new URLSearchParams(location.split('?')[1]);
-    if (params.get('github_auth_success') === 'true') {
-      toast({ title: 'GitHub Connected', description: 'Your GitHub account has been successfully connected.' });
+    if (params.get('github_app_installed') === 'true') {
+      toast({ title: 'GitHub App Installed', description: 'The GitHub App has been successfully installed.' });
       queryClient.invalidateQueries({ queryKey: ['userGitConfig'] }); // Refresh config
-      setLocation(location.split('?')[0], { replace: true }); // Clean up URL
-    } else if (params.get('github_auth_success') === 'false') {
-      const error = params.get('error_description') || 'Unknown error';
-      toast({ title: 'GitHub Connection Failed', description: `Error: ${error}`, variant: 'destructive' });
       setLocation(location.split('?')[0], { replace: true }); // Clean up URL
     }
   }, [location, setLocation, toast, queryClient]);
@@ -151,14 +148,36 @@ const GithubSettingsTab: React.FC = () => {
   };
 
   const handleConnectGitHub = () => {
-    window.location.href = '/api/git/github/authorize';
+    window.location.href = '/api/git/github/app/install';
   };
 
   const handleDisconnectGitHub = () => {
-    disconnectMutation.mutate();
+    // Add a new mutation to disconnect the app
+    disconnectAppMutation.mutate();
   };
 
-  const isConnectedToGitHub = userGitConfig && userGitConfig.github_pat && userGitConfig.github_pat !== '********';
+  const disconnectAppMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/git/github/app/disconnect', { // New endpoint
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to disconnect GitHub App');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'GitHub App Disconnected', description: 'Your GitHub App has been disconnected.' });
+      queryClient.invalidateQueries({ queryKey: ['userGitConfig'] });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: `Failed to disconnect GitHub App: ${err.message}`, variant: 'destructive' });
+    },
+  });
+
+  const isConnectedToGitHub = userGitConfig && userGitConfig.github_app_installation_id;
 
   if (isLoading) return <div className="p-4 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /> Loading Git settings...</div>;
   if (error && error.message !== 'Failed to fetch user Git config') return <div className="p-4 text-center text-red-500">Error: {error.message}</div>;

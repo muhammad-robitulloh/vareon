@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from server_python.database import User, UserGitConfig as DBUserGitConfig # Assuming User model is available
 from server_python.encryption_utils import encrypt_api_key, decrypt_api_key # Assuming these exist
+from server_python.github_app import get_installation_access_token
 from . import schemas, crud
 
 class GitService:
@@ -33,7 +34,7 @@ class GitService:
             raise HTTPException(status_code=400, detail="Invalid repository path: outside user's allowed directory.")
         return abs_path
 
-    def _get_repo(self, local_path: str) -> git.Repo:
+    async def _get_repo(self, local_path: str) -> git.Repo:
         """Gets a git.Repo object for the given local_path, setting up credentials if available."""
         repo_path = self._get_repo_path(local_path)
         if not os.path.exists(os.path.join(repo_path, '.git')):
@@ -41,16 +42,17 @@ class GitService:
         
         repo = git.Repo(repo_path)
         
-        # Configure credentials for push/pull operations if PAT is available
+        # Configure credentials for push/pull operations if installation ID is available
         user_config = self._get_user_git_config()
-        if user_config and hasattr(user_config, 'github_pat') and user_config.github_pat and repo.remotes:
+        if user_config and user_config.github_app_installation_id and repo.remotes:
+            installation_token = await get_installation_access_token(user_config.github_app_installation_id)
             for remote in repo.remotes:
                 # Only modify remote URL if it's a GitHub HTTPS URL
                 if "github.com" in remote.url and remote.url.startswith("https://"):
-                    # Ensure the URL is not already configured with PAT to avoid duplication
-                    if f"oauth2:{user_config.github_pat}@" not in remote.url:
+                    # Ensure the URL is not already configured with a token to avoid duplication
+                    if f"x-access-token:{installation_token}@" not in remote.url:
                         parsed_url = git.cmd.Git.polish_url(remote.url)
-                        auth_url = f"https://oauth2:{user_config.github_pat}@{parsed_url.hostname}{parsed_url.path}"
+                        auth_url = f"https://x-access-token:{installation_token}@{parsed_url.hostname}{parsed_url.path}"
                         with repo.config.edit() as config:
                             config.set_value(f"remote.{remote.name}", "url", auth_url)
         return repo
@@ -64,29 +66,22 @@ class GitService:
         repo = git.Repo.init(repo_path)
         return f"Repository initialized at {request.local_path}"
 
-    def clone_repo(self, request: schemas.GitCloneRequest) -> str:
+    async def clone_repo(self, request: schemas.GitCloneRequest) -> str:
         repo_path = self._get_repo_path(request.local_path)
         if os.path.exists(repo_path) and os.path.exists(os.path.join(repo_path, '.git')):
             raise HTTPException(status_code=400, detail=f"Repository already cloned to {request.local_path}")
 
-        pat_to_use = request.pat
-        if not pat_to_use:
-            user_config = self._get_user_git_config()
-            if user_config and hasattr(user_config, 'github_pat') and user_config.github_pat:
-                pat_to_use = user_config.github_pat
+        user_config = self._get_user_git_config()
+        if not user_config or not user_config.github_app_installation_id:
+            raise HTTPException(status_code=400, detail="GitHub App not installed for this user.")
 
         try:
+            installation_token = await get_installation_access_token(user_config.github_app_installation_id)
             auth_repo_url = request.repo_url
-            if pat_to_use:
+            if "github.com" in request.repo_url:
                 parsed_url = git.cmd.Git.polish_url(request.repo_url)
-                if parsed_url.hostname == "github.com":
-                    # For GitHub, embed PAT directly in HTTPS URL
-                    auth_repo_url = f"https://oauth2:{pat_to_use}@{parsed_url.hostname}{parsed_url.path}"
-                else: 
-                    # For other hosts, GitPython might handle it if PAT is in config,
-                    # but direct embedding is more robust for clone_from
-                    pass 
-            
+                auth_repo_url = f"https://x-access-token:{installation_token}@{parsed_url.hostname}{parsed_url.path}"
+
             repo = git.Repo.clone_from(auth_repo_url, repo_path, branch=request.branch)
             return f"Repository '{request.repo_url}' cloned to {request.local_path}"
         except git.exc.GitCommandError as e:
@@ -94,8 +89,8 @@ class GitService:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred during cloning: {e}")
 
-    def get_status(self, local_path: str) -> schemas.GitStatus:
-        repo = self._get_repo(local_path)
+    async def get_status(self, local_path: str) -> schemas.GitStatus:
+        repo = await self._get_repo(local_path)
         
         staged_files = []
         unstaged_files = []
@@ -137,8 +132,8 @@ class GitService:
             behind_by=behind_by
         )
 
-    def add_files(self, local_path: str, request: schemas.GitAddRequest) -> str:
-        repo = self._get_repo(local_path)
+    async def add_files(self, local_path: str, request: schemas.GitAddRequest) -> str:
+        repo = await self._get_repo(local_path)
         try:
             if '.' in request.files:
                 repo.git.add(all=True)
@@ -148,8 +143,8 @@ class GitService:
         except git.exc.GitCommandError as e:
             raise HTTPException(status_code=400, detail=f"Failed to add files: {e.stderr}")
 
-    def commit_changes(self, local_path: str, request: schemas.GitCommitRequest) -> str:
-        repo = self._get_repo(local_path)
+    async def commit_changes(self, local_path: str, request: schemas.GitCommitRequest) -> str:
+        repo = await self._get_repo(local_path)
         if not repo.index.diff("HEAD"):
             raise HTTPException(status_code=400, detail="No changes to commit from index.")
         
@@ -170,8 +165,8 @@ class GitService:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred during commit: {e}")
 
-    def push_changes(self, local_path: str, request: schemas.GitPushRequest) -> str:
-        repo = self._get_repo(local_path)
+    async def push_changes(self, local_path: str, request: schemas.GitPushRequest) -> str:
+        repo = await self._get_repo(local_path)
         try:
             remote = repo.remote(request.remote_name)
             branch_name = request.branch_name or repo.active_branch.name
@@ -194,8 +189,8 @@ class GitService:
         except git.exc.GitCommandError as e:
             raise HTTPException(status_code=400, detail=f"Failed to push changes: {e.stderr}")
 
-    def pull_changes(self, local_path: str, request: schemas.GitPullRequest) -> str:
-        repo = self._get_repo(local_path)
+    async def pull_changes(self, local_path: str, request: schemas.GitPullRequest) -> str:
+        repo = await self._get_repo(local_path)
         try:
             remote = repo.remote(request.remote_name)
             branch_name = request.branch_name or repo.active_branch.name
@@ -213,16 +208,16 @@ class GitService:
         except git.exc.GitCommandError as e:
             raise HTTPException(status_code=400, detail=f"Failed to pull changes: {e.stderr}")
 
-    def checkout_branch(self, local_path: str, request: schemas.GitCheckoutRequest) -> str:
-        repo = self._get_repo(local_path)
+    async def checkout_branch(self, local_path: str, request: schemas.GitCheckoutRequest) -> str:
+        repo = await self._get_repo(local_path)
         try:
             repo.git.checkout(request.branch_name)
             return f"Checked out branch {request.branch_name}"
         except git.exc.GitCommandError as e:
             raise HTTPException(status_code=400, detail=f"Failed to checkout branch: {e.stderr}")
 
-    def create_branch(self, local_path: str, request: schemas.GitCreateBranchRequest) -> str:
-        repo = self._get_repo(local_path)
+    async def create_branch(self, local_path: str, request: schemas.GitCreateBranchRequest) -> str:
+        repo = await self._get_repo(local_path)
         try:
             new_branch = repo.create_head(request.branch_name)
             # new_branch.checkout() # Often you want to checkout after creating
@@ -230,8 +225,8 @@ class GitService:
         except git.exc.GitCommandError as e:
             raise HTTPException(status_code=400, detail=f"Failed to create branch: {e.stderr}")
     
-    def get_branches(self, local_path: str) -> List[schemas.GitBranch]:
-        repo = self._get_repo(local_path)
+    async def get_branches(self, local_path: str) -> List[schemas.GitBranch]:
+        repo = await self._get_repo(local_path)
         branches: List[schemas.GitBranch] = []
         try:
             active_branch_name = repo.active_branch.name
@@ -261,7 +256,7 @@ class GitService:
                     ))
         return branches
 
-    def read_file_content(self, local_path: str, file_path: str) -> str:
+    async def read_file_content(self, local_path: str, file_path: str) -> str:
         repo_abs_path = self._get_repo_path(local_path)
         file_abs_path = os.path.join(repo_abs_path, file_path)
         # Ensure the file is actually within the repository path after normalization
@@ -278,7 +273,7 @@ class GitService:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to read file '{file_path}': {e}")
 
-    def write_file_content(self, local_path: str, file_path: str, content: str) -> str:
+    async def write_file_content(self, local_path: str, file_path: str, content: str) -> str:
         repo_abs_path = self._get_repo_path(local_path)
         file_abs_path = os.path.join(repo_abs_path, file_path)
         
@@ -296,8 +291,8 @@ class GitService:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to write to file '{file_path}': {e}")
 
-    def get_diff(self, local_path: str, request: schemas.GitDiffRequest) -> schemas.GitDiffResponse:
-        repo = self._get_repo(local_path)
+    async def get_diff(self, local_path: str, request: schemas.GitDiffRequest) -> schemas.GitDiffResponse:
+        repo = await self._get_repo(local_path)
         try:
             if request.path:
                 diff_output = repo.git.diff(request.path)
@@ -307,8 +302,8 @@ class GitService:
         except git.exc.GitCommandError as e:
             raise HTTPException(status_code=400, detail=f"Failed to get diff: {e.stderr}")
 
-    def get_log(self, local_path: str) -> schemas.GitLogResponse:
-        repo = self._get_repo(local_path)
+    async def get_log(self, local_path: str) -> schemas.GitLogResponse:
+        repo = await self._get_repo(local_path)
         log_entries = []
         try:
             for commit in repo.iter_commits():

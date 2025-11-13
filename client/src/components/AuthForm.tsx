@@ -15,10 +15,11 @@ export default function AuthForm() {
 
   // --- Handle OAuth Callback ---
   useEffect(() => {
-    const params = new URLSearchParams(location.split('?')[1]);
+    const params = new URLSearchParams(window.location.search);
     const oauthSuccess = params.get('oauth_success');
     const token = params.get('token');
     const error = params.get('error');
+    const needsGithubAppInstall = params.get('needs_github_app_install'); // New line
 
     if (oauthSuccess === 'true' && token) {
       localStorage.setItem("access_token", token);
@@ -27,7 +28,13 @@ export default function AuthForm() {
         description: "You have been logged in via OAuth.",
         variant: "success",
       });
-      setLocation("/dashboard", { replace: true }); // Redirect to dashboard and clean URL
+
+      if (needsGithubAppInstall === 'true') { // New conditional logic
+        // Redirect to backend endpoint to initiate GitHub App installation
+        window.location.href = `/api/git/github/app/install?token=${token}`;
+      } else {
+        setLocation("/dashboard", { replace: true }); // Redirect to dashboard and clean URL
+      }
     } else if (oauthSuccess === 'false' && error) {
       toast({
         title: "OAuth Login Failed",

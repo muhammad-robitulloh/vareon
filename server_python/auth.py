@@ -157,6 +157,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def decode_access_token(token: str) -> dict:
+    """Decodes a JWT token and returns its payload."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError as e:
+        raise JWTError(f"Could not validate credentials: {e}")
+
 from . import database # Import the database module
 from .database import get_user_from_db, User # Keep other necessary imports
 
@@ -171,7 +179,7 @@ async def _get_user_from_token(token: str, db: Session) -> User:
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_access_token(token) # Use the new function
         username: str = payload.get("username")
         if username is None:
             logger.warning("Username not found in JWT payload, raising credentials_exception.")
@@ -183,7 +191,7 @@ async def _get_user_from_token(token: str, db: Session) -> User:
             raise credentials_exception
         logger.info(f"User {user.username} successfully authenticated.")
         return user
-    except JWTError as e:
+    except JWTError as e: # Catch JWTError from decode_access_token
         logger.warning(f"JWT decoding error: {e}, raising credentials_exception.")
         raise credentials_exception
     except Exception as e:
