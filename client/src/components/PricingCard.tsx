@@ -32,26 +32,26 @@ export const PricingCard: React.FC<PricingCardProps> = ({ plan, billingCycle, on
   return (
     <div
       className={`
-        border-2 rounded-lg p-6 flex flex-col h-full
+        border-2 rounded-lg p-4 flex flex-col min-h-[300px]
         ${isProfessional ? 'border-purple-500 bg-purple-900/10' : 'border-gray-700'}
         transform hover:scale-105 transition-transform duration-300
       `}
     >
       {isProfessional && (
-        <div className="text-center mb-4">
+        <div className="text-center mb-3">
           <span className="bg-purple-500 text-white text-sm font-bold px-3 py-1 rounded-full">
             Most Popular
           </span>
         </div>
       )}
-      <h2 className="text-2xl font-bold text-center mb-4">{plan.name}</h2>
+      <h2 className="text-2xl font-bold text-center mb-3">{plan.name}</h2>
       
-      <div className="text-4xl font-bold text-center mb-6">
+      <div className="text-3xl font-bold text-center mb-4">
         {formatPrice(currentPrice)}
-        {currentPrice > 0 && <span className="text-lg font-normal text-gray-400">{priceSuffix}</span>}
+        {currentPrice > 0 && <span className="text-base font-normal text-gray-400">{priceSuffix}</span>}
       </div>
 
-      <ul className="space-y-3 mb-8 text-gray-300 flex-grow">
+      <ul className="space-y-2 mb-6 text-gray-300 flex-grow">
         {plan.features.map((feature, index) => (
           <li key={index} className="flex items-start">
             <svg className="w-5 h-5 mr-2 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

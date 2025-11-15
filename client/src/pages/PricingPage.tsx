@@ -30,7 +30,11 @@ const PricingPage: React.FC = () => {
       try {
         setLoading(true);
         const response = await api.get('/api/subscriptions/plans');
-        setPlans(response);
+        setPlans(response.sort((a: Plan, b: Plan) => {
+          if (a.name === 'Enterprise') return 1;
+          if (b.name === 'Enterprise') return -1;
+          return 0;
+        }));
         setError(null);
       } catch (err) {
         setError('Failed to load subscription plans. Please try again later.');
@@ -56,7 +60,7 @@ const PricingPage: React.FC = () => {
 
   const handleSkip = async () => {
     try {
-      await api.post('/api/subscriptions/skip');
+      await api.post('/api/subscriptions/skip', {});
       navigate('/'); // Redirect to dashboard
     } catch (err) {
       setError('An error occurred. Please try again.');
