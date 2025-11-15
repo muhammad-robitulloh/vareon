@@ -14,46 +14,47 @@ import {
   NeosyntisDemo,
   MyntrixDemo,
   NotFound,
-  Auth,
-  VerifyEmail,
-  WaitingForVerification,
-} from '@/pages';
-
-
-import {
-  NotFound as NotFoundDash,
-  Dashboard,
-  Neosyntis,
-  Myntrix,
-  Cognisys as CognisysPage,
-  Arcana,
-  UserProfile, // Import UserProfile
-} from '@/pages/dashboard-pages';
-
-function Router() {
-  return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/arcana-demo" component={ArcanaDemo} />
-      <Route path="/neosyntis-demo" component={NeosyntisDemo} />
-      <Route path="/myntrix-demo" component={MyntrixDemo} />
-      <Route path="/auth" component={Auth} />
-      <Route path="/verify-email" component={VerifyEmail} />
-      <Route path="/waiting-for-verification" component={WaitingForVerification} />
-      <ProtectedRoute>
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/dashboard/neosyntis" component={Neosyntis} />
-        <Route path="/dashboard/myntrix" component={Myntrix} />
-        <Route path="/dashboard/cognisys" component={CognisysPage} />
-        <Route path="/dashboard/arcana" component={Arcana} />
-        <Route path="/dashboard/profile" component={UserProfile} /> {/* New User Profile Route */}
-      </ProtectedRoute>   
-   <Route component={NotFound} />
-    </Switch>
-  );
-}
-
-export default function App() {
+    Auth,
+    VerifyEmail,
+    WaitingForVerification,
+    PricingPage, // Import the new PricingPage
+  } from '@/pages';
+  
+  
+  import {
+    NotFound as NotFoundDash,
+    Dashboard,
+    Neosyntis,
+    Myntrix,
+    Cognisys as CognisysPage,
+    Arcana,
+    UserProfile, // Import UserProfile
+  } from '@/pages/dashboard-pages';
+  
+  function Router() {
+    return (
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/arcana-demo" component={ArcanaDemo} />
+        <Route path="/neosyntis-demo" component={NeosyntisDemo} />
+        <Route path="/myntrix-demo" component={MyntrixDemo} />
+        <Route path="/auth" component={Auth} />
+        <Route path="/verify-email" component={VerifyEmail} />
+        <Route path="/waiting-for-verification" component={WaitingForVerification} />
+        <ProtectedRoute>
+          <Route path="/pricing" component={PricingPage} /> {/* Add the new pricing route */}
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/dashboard/neosyntis" component={Neosyntis} />
+          <Route path="/dashboard/myntrix" component={Myntrix} />
+          <Route path="/dashboard/cognisys" component={CognisysPage} />
+          <Route path="/dashboard/arcana" component={Arcana} />
+          <Route path="/dashboard/profile" component={UserProfile} /> {/* New User Profile Route */}
+        </ProtectedRoute>
+     <Route component={NotFound} />
+      </Switch>
+    );
+  }
+  export default function App() {
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",

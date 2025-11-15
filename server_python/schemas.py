@@ -1,7 +1,44 @@
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 import uuid
+import json
+
+# --- Subscription Schemas ---
+
+class Plan(BaseModel):
+    id: uuid.UUID
+    name: str
+    price_monthly: int
+    price_yearly: int
+    max_users: int
+    features: List[str] = []
+    demo_credits: Optional[int] = None
+
+    @validator('features', pre=True)
+    def features_from_json(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return []
+        return v
+
+    class Config:
+        orm_mode = True
+
+class UserSubscription(BaseModel):
+    id: uuid.UUID
+    plan_id: uuid.UUID
+    start_date: datetime
+    end_date: Optional[datetime] = None
+    status: str
+    plan: Plan
+
+    class Config:
+        orm_mode = True
+
+# --- User Schemas ---
 
 class Token(BaseModel):
     access_token: str
@@ -46,6 +83,8 @@ class User(UserBase):
     verification_token: Optional[str] = None
     verification_token_expires_at: Optional[datetime] = None
     roles: List[Role] = []
+    demo_credits: int = 0
+    subscriptions: List[UserSubscription] = []
 
     class Config:
         orm_mode = True

@@ -1,10 +1,34 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Input, Label } from '@/components/ui';
 import { useToast } from '@/hooks/use-toast';
-import { User as UserIcon, Mail, Lock, LogOut } from 'lucide-react'; // Removed Github icon
+import { User as UserIcon, Mail, Lock, LogOut, CreditCard } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-import { useLocation } from 'wouter';
-import GithubSettingsTab from '@/components/dashboard/user-profile/GithubSettingsTab'; // Import GithubSettingsTab
+import { useLocation, Link } from 'wouter';
+import GithubSettingsTab from '@/components/dashboard/user-profile/GithubSettingsTab';
+import { useQuery } from '@tanstack/react-query'; // Import useQuery
+import { api } from '@/lib/api'; // Import api helper
+import { format } from 'date-fns'; // For date formatting
+
+// Define the Plan type based on the backend schema
+interface Plan {
+  id: string;
+  name: string;
+  price_monthly: number;
+  price_yearly: number;
+  features: string[];
+  max_users: number;
+  demo_credits?: number;
+}
+
+// Define the UserSubscription type based on the backend schema
+interface UserSubscription {
+  id: string;
+  plan_id: string;
+  start_date: string; // Assuming ISO string from backend
+  end_date: string | null;
+  status: string;
+  plan: Plan;
+}
 
 // Mock API call for fetching user data
 const fetchUserData = async () => {
@@ -42,7 +66,16 @@ export default function UserProfile() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  // const [isGithubConnected, setIsGithubConnected] = useState(false); // Removed
+
+  // Fetch user's current subscription
+  const { data: subscription, isLoading: isSubscriptionLoading, error: subscriptionError } = useQuery<UserSubscription>({
+    queryKey: ['userSubscription'],
+    queryFn: async () => {
+      const response = await api.get('/api/subscriptions/my-plan');
+      return response;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -133,12 +166,20 @@ export default function UserProfile() {
     });
   };
 
-  if (loading) {
+  if (loading || isSubscriptionLoading) {
     return (
       <div className="flex justify-center items-center h-full">
         <p className="text-muted-foreground">Loading user profile...</p>
       </div>
     );
+  }
+
+  if (subscriptionError) {
+    toast({
+      title: 'Error',
+      description: `Failed to load subscription data: ${subscriptionError.message}`,
+      variant: 'destructive',
+    });
   }
 
   return (
@@ -223,7 +264,44 @@ export default function UserProfile() {
         </CardContent>
       </Card>
 
-      <GithubSettingsTab /> {/* Integrated GithubSettingsTab */}
+      <GithubSettingsTab />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-primary" />
+            Subscription Management
+          </CardTitle>
+          <CardDescription>
+            {isSubscriptionLoading ? (
+              "Loading subscription details..."
+            ) : subscription ? (
+              <>
+                Your current plan: <span className="font-bold text-green-400">{subscription.plan.name}</span> (Status: {subscription.status})
+                {subscription.end_date && (
+                  <>
+                    <br />Renews on: {format(new Date(subscription.end_date), 'PPP')}
+                  </>
+                )}
+                {subscription.plan.demo_credits !== undefined && subscription.plan.demo_credits !== null && (
+                  <>
+                    <br />Remaining Demo Credits: {subscription.plan.demo_credits}
+                  </>
+                )}
+              </>
+            ) : (
+              "No active subscription found."
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/pricing">
+            <Button variant="outline">
+              {subscription && subscription.plan.name !== "Enterprise" ? "Upgrade Plan" : "View Plans"}
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

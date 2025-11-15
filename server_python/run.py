@@ -4,16 +4,25 @@ import sys
 import os
 import logging
 import atexit
-import select
 import time
 from dotenv import load_dotenv
 
-# --- Basic Logging Setup ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# --- Path Setup ---
+# This is crucial to ensure that the 'server_python' module can be found.
+# We add the project's root directory to the Python path.
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Now that the path is set up, we can import our modules.
+from server_python.logging_config import setup_logging
 
 # --- Global list to keep track of running subprocesses ---
 running_processes = []
+
+# Get a logger with a specific name for this script
+logger = logging.getLogger("run_script")
 
 def cleanup_processes():
     """Ensure all child processes are terminated on exit."""
@@ -21,10 +30,12 @@ def cleanup_processes():
     for proc in running_processes:
         if proc.poll() is None:  # If the process is still running
             try:
+                # Send SIGTERM first for graceful shutdown
                 proc.terminate()
                 proc.wait(timeout=5)
                 logger.info(f"Terminated process with PID: {proc.pid}")
             except subprocess.TimeoutExpired:
+                # Force kill if terminate doesn't work
                 proc.kill()
                 logger.warning(f"Forcefully killed process with PID: {proc.pid}")
             except Exception as e:
@@ -36,7 +47,7 @@ def cleanup_processes():
         if any("gunicorn" in p.name() for p in psutil.process_iter()):
              os.system("pkill gunicorn")
              logger.info("Attempted to clean up any stray gunicorn processes.")
-    except NameError: # psutil might not be installed
+    except (ImportError, NameError): # psutil might not be installed
         pass
     except Exception as e:
         logger.error(f"Error during gunicorn cleanup: {e}")
@@ -47,11 +58,16 @@ atexit.register(cleanup_processes)
 
 
 def main():
-    # Load environment variables from .env file
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # --- Load environment variables and setup logging FIRST ---
     dotenv_path = os.path.join(script_dir, '.env')
     if os.path.exists(dotenv_path):
         load_dotenv(dotenv_path)
+        # Note: Logging is set up after this, so this message will use the new format.
+    
+    # Setup the centralized logging configuration
+    setup_logging()
+
+    if os.path.exists(dotenv_path):
         logger.info(f"Loaded environment variables from {dotenv_path}")
     else:
         logger.warning(f".env file not found at {dotenv_path}. Proceeding with system environment variables.")
@@ -63,18 +79,11 @@ def main():
     parser.add_argument("--port", type=int, default=5000, help="Port for the backend server. Default is 5000.")
     parser.add_argument("--workers", type=int, default=4, help="Number of worker processes for gunicorn.")
     parser.add_argument("--with-frontend", action="store_true", help="Also build the Node.js frontend and serve it from FastAPI.")
+    parser.add_argument("--tunnel", action="store_true", help="Run a cloudflared tunnel to expose the local server.")
     args = parser.parse_args()
 
-    # Get the absolute path of the directory containing this script (server-python)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Get the parent directory (Vareon)
-    project_root = os.path.dirname(script_dir)
     frontend_dir = os.path.join(project_root, 'client') # Assuming frontend is in Vareon/client
     frontend_build_dir = os.path.join(project_root, 'dist', 'public') # Corrected path for build output
-
-    # Add the project root to sys.path so 'server-python' can be imported as a top-level package
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
 
     if args.dev:
         # --- Build Frontend (if --with-frontend is specified) ---
@@ -84,27 +93,28 @@ def main():
                 logger.error(f"Frontend source directory not found: {frontend_dir}. Skipping frontend build.")
             else:
                 try:
+                    # We use subprocess.run here because these are short-lived build commands.
                     logger.info("Running 'npm install' for frontend...")
                     npm_install_result = subprocess.run(['npm', 'install'], cwd=frontend_dir, check=True, capture_output=True, text=True)
-                    logger.info(f"npm install completed. Stdout lines: {len(npm_install_result.stdout.splitlines())}, Stderr lines: {len(npm_install_result.stderr.splitlines())}")
+                    logger.info(f"npm install completed. Stdout lines: {len(npm_install_result.stdout.splitlines())}")
                     if npm_install_result.stderr:
-                        logger.warning(f"npm install had warnings/errors. Full stderr:\n{npm_install_result.stderr}")
+                        logger.warning(f"npm install had warnings/errors.")
 
                     logger.info("Running 'npm run build' for frontend...")
                     npm_build_result = subprocess.run(['npm', 'run', 'build'], cwd=frontend_dir, check=True, capture_output=True, text=True)
-                    logger.info(f"npm run build completed. Stdout lines: {len(npm_build_result.stdout.splitlines())}, Stderr lines: {len(npm_build_result.stderr.splitlines())}")
+                    logger.info(f"npm run build completed. Stdout lines: {len(npm_build_result.stdout.splitlines())}")
                     if npm_build_result.stderr:
-                        logger.warning(f"npm run build had warnings/errors. Full stderr:\n{npm_build_result.stderr}")
+                        logger.warning(f"npm run build had warnings/errors.")
                     logger.info("Frontend build successful.")
 
                 except subprocess.CalledProcessError as e:
-                    logger.error(f"Frontend build failed: {e.cmd}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}")
+                    logger.error(f"Frontend build failed: {e.cmd}\nStderr:\n{e.stderr}")
                     sys.exit(1)
                 except FileNotFoundError:
                     logger.error("npm command not found. Please ensure Node.js and npm are installed.")
                     sys.exit(1)
                 except Exception as e:
-                    logger.error(f"Failed to build frontend: {e}")
+                    logger.error(f"Failed to build frontend: {e}", exc_info=True)
                     sys.exit(1)
 
         # --- Start Python Backend ---
@@ -113,30 +123,54 @@ def main():
         new_env = os.environ.copy()
         new_env["PYTHONPATH"] = project_root + os.pathsep + new_env.get("PYTHONPATH", "")
         new_env["DATASET_STORAGE_DIR"] = os.path.join(script_dir, 'data', 'neosyntis_datasets')
+        # Ensure the backend uses the same logging config by passing LOG_LEVEL vars
+        for key, value in os.environ.items():
+            if key.startswith("LOG_LEVEL"):
+                new_env[key] = value
 
         try:
+            # The backend (uvicorn) process will inherit the standard output and error streams.
+            # This allows RichHandler to manage the output directly, preventing duplicated or
+            # poorly formatted log messages.
             backend_process = subprocess.Popen(
                 [
                     sys.executable, "-m", "uvicorn",
                     "server_python.main:app",
                     "--host", args.host,
                     "--port", str(args.port),
-                    "--reload" # Added for development convenience
+                    "--reload"
                 ],
                 cwd=script_dir,
                 env=new_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True, # Decode stdout/stderr as text
-                bufsize=1, # Line-buffered
-                universal_newlines=True # Ensure text mode works across platforms
+                # Let the subprocess print directly to the console
+                stdout=sys.stdout,
+                stderr=sys.stderr,
             )
             running_processes.append(backend_process)
-            logger.info(f"Python backend started with PID: {backend_process.pid}")
+            logger.info(f"Python backend process started with PID: {backend_process.pid}")
 
         except Exception as e:
-            logger.error(f"Failed to start Python backend: {e}")
+            logger.error(f"Failed to start Python backend: {e}", exc_info=True)
             sys.exit(1)
+
+        # --- Start Cloudflared Tunnel (if --tunnel is specified) ---
+        if args.tunnel:
+            logger.info("Starting cloudflared tunnel...")
+            try:
+                # The cloudflared command will output its logs to its stdout/stderr,
+                # which are inherited by the parent process, so they will appear in the console.
+                tunnel_process = subprocess.Popen(
+                    ["cloudflared", "tunnel", "--url", f"http://{args.host}:{args.port}", "run", "arcana"],
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                )
+                running_processes.append(tunnel_process)
+                logger.info(f"Cloudflared tunnel process started with PID: {tunnel_process.pid}. It may take a moment to connect.")
+            except FileNotFoundError:
+                logger.error("'cloudflared' command not found. Please ensure it is installed and in your PATH.")
+                # We don't exit here, the main server can still run locally.
+            except Exception as e:
+                logger.error(f"Failed to start cloudflared tunnel: {e}", exc_info=True)
 
         logger.info("\n=========================================")
         logger.info("          Vareon is running!            ")
@@ -148,78 +182,52 @@ def main():
             logger.info("- Frontend: Not built or not served.")
         logger.info("\nPress Ctrl+C to stop all servers.")
 
-        # --- Stream logs from subprocesses ---
-        # Make stdout and stderr non-blocking
-        os.set_blocking(backend_process.stdout.fileno(), False)
-        os.set_blocking(backend_process.stderr.fileno(), False)
-
+        # --- Wait for backend process to exit ---
         try:
-            while backend_process.poll() is None:
-                # Check stdout
-                stdout_line = backend_process.stdout.readline()
-                if stdout_line:
-                    logger.info(f"[Backend] {stdout_line.strip()}")
-
-                # Check stderr
-                stderr_line = backend_process.stderr.readline()
-                if stderr_line:
-                    # Uvicorn often logs INFO to stderr, so we check for that
-                    if "INFO:" in stderr_line:
-                        logger.info(f"[Backend] {stderr_line.strip()}")
-                    else:
-                        logger.error(f"[Backend ERROR] {stderr_line.strip()}")
-
-                time.sleep(0.1) # Prevent busy-waiting
-
+            # Now we just wait for the process to complete. The atexit handler
+            # will take care of termination on script exit (e.g., Ctrl+C).
+            backend_process.wait()
         except KeyboardInterrupt:
-            logger.info("Ctrl+C detected. Initiating graceful shutdown.")
+            logger.info("Ctrl+C detected. Initiating graceful shutdown via atexit handler.")
+            # The atexit handler will be called automatically.
             sys.exit(0)
         except Exception as e:
-            logger.error(f"An error occurred during log streaming: {e}")
+            logger.error(f"An unexpected error occurred while waiting for backend: {e}", exc_info=True)
             sys.exit(1)
         finally:
-            # This block will run when the loop terminates, either by process exit or error
             if backend_process.poll() is not None:
                 logger.warning(f"Backend process exited with code {backend_process.poll()}.")
-                # Drain any remaining output
-                for line in backend_process.stdout:
-                    logger.info(f"[Backend] {line.strip()}")
-                for line in backend_process.stderr:
-                    logger.error(f"[Backend ERROR] {line.strip()}")
-
 
     elif args.prod:
         logger.info(f"Starting production server with gunicorn on http://{args.host}:{args.port}")
-        # In production, we want gunicorn to be the main process to allow for easy management.
-        # We use os.execvpe to replace the current Python script with the gunicorn process.
-        # This means the Python script will no longer be running, and gunicorn takes over.
-        # atexit cleanup will NOT run in this case, which is fine because gunicorn manages its workers.
+        # In production, we use os.execvpe to replace the current script with gunicorn.
+        # This is standard practice and means the atexit handler will not run, as
+        # gunicorn takes over process management.
         
-        # Set up environment
         new_env = os.environ.copy()
         new_env["PYTHONPATH"] = project_root + os.pathsep + new_env.get("PYTHONPATH", "")
         new_env["DATASET_STORAGE_DIR"] = os.path.join(script_dir, 'data', 'neosyntis_datasets')
 
-        gunicorn_executable = "gunicorn" # Assumes gunicorn is in the system's PATH
+        gunicorn_executable = "gunicorn"
 
-        # Command and arguments for gunicorn
         gunicorn_args = [
             gunicorn_executable,
             '--workers', str(args.workers),
             '--bind', f'{args.host}:{args.port}',
-            '--worker-class', 'uvicorn.workers.UvicornWorker', # Use uvicorn workers for async performance
+            '--worker-class', 'uvicorn.workers.UvicornWorker',
+            # Tell gunicorn to use our logging config by setting the log config class
+            '--log-config-dict', '{"version": 1, "disable_existing_loggers": false}',
             'server_python.main:app',
         ]
         
         try:
             logger.info(f"Executing command: {' '.join(gunicorn_args)}")
-            # Replace the current process with gunicorn
             os.execvpe(gunicorn_executable, gunicorn_args, new_env)
         except FileNotFoundError:
             logger.error("Gunicorn not found. Please make sure it's installed (pip install gunicorn uvicorn).")
             sys.exit(1)
         except Exception as e:
-            logger.error(f"Failed to start gunicorn: {e}")
+            logger.error(f"Failed to start gunicorn: {e}", exc_info=True)
             sys.exit(1)
 
     else:

@@ -32,10 +32,13 @@ export default function VerifyEmail() {
     onSuccess: (data) => {
       toast({
         title: "Success!",
-        description: data.message || "Email verified successfully.",
+        description: data.message || "Email verified successfully. Redirecting...",
         variant: "default",
       });
-      // No immediate redirect, button will change to 'Back to Login'
+      // Redirect to the pricing page on successful verification
+      setTimeout(() => {
+        setLocation("/pricing");
+      }, 1500); // Short delay to allow user to read the toast
     },
     onError: (error: any) => {
       toast({

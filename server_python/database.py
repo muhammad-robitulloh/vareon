@@ -54,6 +54,32 @@ class User(Base):
     verification_token = Column(String, nullable=True)
     verification_token_expires_at = Column(DateTime, nullable=True)
     roles = relationship("Role", secondary=user_roles, backref="users")
+    
+    # Subscription-related fields
+    demo_credits = Column(Integer, default=0)
+    subscriptions = relationship("UserSubscription", back_populates="user")
+
+class Plan(Base):
+    __tablename__ = "plans"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, unique=True, index=True, nullable=False)
+    price_monthly = Column(Integer, nullable=False)
+    price_yearly = Column(Integer, nullable=False)
+    max_users = Column(Integer, default=1)
+    features = Column(Text, nullable=True) # Storing as JSON string
+    demo_credits = Column(Integer, nullable=True)
+
+class UserSubscription(Base):
+    __tablename__ = "user_subscriptions"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
+    plan_id = Column(String(36), ForeignKey('plans.id'), nullable=False)
+    start_date = Column(DateTime, default=datetime.utcnow)
+    end_date = Column(DateTime, nullable=True)
+    status = Column(String, default="active") # e.g., active, cancelled, expired
+    
+    user = relationship("User", back_populates="subscriptions")
+    plan = relationship("Plan")
 
 class Agent(Base):
     __tablename__ = "agents"
@@ -446,6 +472,79 @@ def setup_default_user(db, get_password_hash_func):
 
     if not get_user_by_email(db, default_email):
         print(f"Default user '{default_username}' created with password '{default_password}'")
+
+def seed_initial_plans(db: Session):
+    import json
+
+    plans_to_seed = {
+        "Free Trial": {
+            "price_monthly": 0, "price_yearly": 0, "max_users": 1, "demo_credits": 100,
+            "features": json.dumps([
+                "Basic Access to Core Modules",
+                "100 Demo Credits for Advanced Modules",
+                "Community Forum Support"
+            ])
+        },
+        "Student": {
+            "price_monthly": 15000, "price_yearly": 150000, "max_users": 1, "demo_credits": 500,
+            "features": json.dumps([
+                "Full Access to Core Modules",
+                "500 Demo Credits for Advanced Modules",
+                "Requires Student Verification",
+                "Community Forum Support"
+            ])
+        },
+        "Individual": {
+            "price_monthly": 75000, "price_yearly": 750000, "max_users": 1, "demo_credits": 1000,
+            "features": json.dumps([
+                "Full Access to Core Modules",
+                "1000 Demo Credits for Advanced Modules",
+                "Standard Email Support"
+            ])
+        },
+        "Professional": {
+            "price_monthly": 250000, "price_yearly": 2500000, "max_users": 5, "demo_credits": None,
+            "features": json.dumps([
+                "Unlimited Access to All Modules",
+                "Up to 5 Users in Workspace",
+                "Premium Model Access",
+                "Priority Email Support"
+            ])
+        },
+        "Enterprise": {
+            "price_monthly": -1, "price_yearly": -1, "max_users": -1, "demo_credits": None, # -1 indicates "Custom"
+            "features": json.dumps([
+                "Unlimited Access & Custom Models",
+                "Custom User Seat Count",
+                "Custom Admin Configuration",
+                "Dedicated Support Manager"
+            ])
+        }
+    }
+
+    for plan_name, details in plans_to_seed.items():
+        plan = db.query(Plan).filter(Plan.name == plan_name).first()
+        if not plan:
+            new_plan = Plan(
+                id=str(uuid.uuid4()),
+                name=plan_name,
+                price_monthly=details["price_monthly"],
+                price_yearly=details["price_yearly"],
+                max_users=details["max_users"],
+                demo_credits=details["demo_credits"],
+                features=details["features"]
+            )
+            db.add(new_plan)
+            print(f"Created subscription plan: {plan_name}")
+        else: # Update existing plans
+            plan.price_monthly = details["price_monthly"]
+            plan.price_yearly = details["price_yearly"]
+            plan.max_users = details["max_users"]
+            plan.demo_credits = details["demo_credits"]
+            plan.features = details["features"]
+            print(f"Updated subscription plan: {plan_name}")
+            
+    db.commit()
 
 def populate_initial_llm_data(db: Session):
     # Check for and create default LLM Provider (e.g., OpenRouter)

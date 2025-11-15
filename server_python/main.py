@@ -29,7 +29,17 @@ if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
 # Now relative imports should work if main.py is run directly
-from server_python.database import Base, engine, SessionLocal, setup_default_user, get_user_from_db, create_user_in_db, get_db, User as DBUser, get_user_by_username_or_email, Agent as DBAgent, HardwareDevice as DBHardwareDevice, Workflow as DBWorkflow, Dataset as DBDataset, RoutingRule as DBRoutingRule, Conversation as DBConversation, ChatMessage as DBChatMessage, ContextMemory as DBContextMemory, LLMProvider as DBLLMProvider, LLMModel as DBLLMModel, UserLLMPreference as DBUserLLMPreference, TerminalSession as DBTerminalSession, TerminalCommandHistory as DBTerminalCommandHistory, populate_initial_llm_data # Alias User from database to DBUser and other models
+from server_python.database import (
+    Base, engine, SessionLocal, setup_default_user, get_user_from_db, 
+    create_user_in_db, get_db, User as DBUser, get_user_by_username_or_email, 
+    Agent as DBAgent, HardwareDevice as DBHardwareDevice, Workflow as DBWorkflow, 
+    Dataset as DBDataset, RoutingRule as DBRoutingRule, Conversation as DBConversation, 
+    ChatMessage as DBChatMessage, ContextMemory as DBContextMemory, 
+    LLMProvider as DBLLMProvider, LLMModel as DBLLMModel, 
+    UserLLMPreference as DBUserLLMPreference, TerminalSession as DBTerminalSession, 
+    TerminalCommandHistory as DBTerminalCommandHistory, populate_initial_llm_data,
+    seed_initial_plans, Plan, UserSubscription # Import Plan and UserSubscription
+)
 from server_python.auth import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, generate_verification_token, send_verification_email, PermissionChecker, VERIFICATION_TOKEN_EXPIRE_MINUTES, get_websocket_token, get_current_websocket_user
 from server_python.schemas import Token, User, UserCreate, UserBase, Agent, AgentCreate, HardwareDevice, HardwareDeviceUpdate, Workflow, WorkflowCreate, Dataset, DatasetCreate, RoutingRule, RoutingRuleCreate, MessageResponse, UserUpdate, TelemetryData, ChatRequest, ChatResponse, ChatMessage, Conversation, ConversationCreate, ConversationUpdate, ContextMemory, ContextMemoryCreate, ContextMemoryUpdate, LLMProvider, LLMProviderCreate, LLMProviderUpdate, LLMModel, LLMModelCreate, LLMModelUpdate, UserLLMPreference, UserLLMPreferenceCreate, UserLLMPreferenceUpdate, TerminalSession, TerminalSessionCreate, TerminalSessionUpdate, TerminalCommandHistory, TerminalCommandHistoryCreate, SystemStatus
 from server_python import llm_service # Import the new LLM service
@@ -42,6 +52,8 @@ from server_python.context_memory import api as context_memory_api # Import the 
 from server_python.git_service import api as git_api # Import the git_service API router
 from server_python import auth_oauth # Import the new auth_oauth router
 from server_python import github_app # Import the new github_app router
+from server_python.api import subscription as subscription_api # Import the new subscription router
+from server_python.logging_config import setup_logging # Import the new logging setup
 
 app = FastAPI()
 
@@ -53,24 +65,34 @@ app.include_router(context_memory_api.router, prefix="/api/context_memory", tags
 app.include_router(git_api.router, prefix="/api/git", tags=["Git"])
 app.include_router(auth_oauth.router, prefix="/api/auth", tags=["OAuth"]) # Include the OAuth router
 app.include_router(github_app.router, prefix="/api/git", tags=["Git"]) # Include the GitHub App router
+app.include_router(subscription_api.router) # Include the subscription router
 app.mount("/ws-api", orchestrator_app.app)
+
+# Get a logger with a specific name for the main application module
+logger = logging.getLogger("main_app")
 
 @app.on_event("startup")
 async def startup_event():
+    # The logging system is configured by the script that starts the server (run.py)
+    # so we don't need to call setup_logging() here in the normal flow.
+    logger.info("Application startup sequence initiated.")
+    
     # Create database tables if they don't exist
     try:
         Base.metadata.create_all(bind=engine)
-        print("Database tables created or already exist.")
+        logger.info("Database tables created or already exist.")
     except Exception as e:
-        print(f"Error creating database tables: {e}")
+        logger.error(f"Error creating database tables: {e}", exc_info=True)
     
-    # Setup default user and roles/permissions
+    # Setup default user, roles, and seed initial data
     db = SessionLocal()
     try:
         setup_default_user(db, get_password_hash)
-        populate_initial_llm_data(db) # Call the new function
+        populate_initial_llm_data(db)
+        seed_initial_plans(db) # Seed the subscription plans
     finally:
         db.close()
+    logger.info("Application startup sequence finished.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -79,9 +101,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 module_startup_times = {
     "arcana": datetime.now(timezone.utc),
@@ -269,6 +288,41 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         data={"username": user.username}, expires_delta=access_token_expires
     )
     logger.info(f"AUDIT: User logged in successfully. User ID: {user.id}, Username: {user.username}")
+
+    # Special logic for 'mrbtlhh' to grant Enterprise plan
+    if user.username == 'mrbtlhh':
+        logger.info(f"Special user 'mrbtlhh' detected. Ensuring Enterprise plan is active.")
+        enterprise_plan = db.query(Plan).filter(Plan.name == "Enterprise").first()
+        if enterprise_plan:
+            # Check for an existing active enterprise subscription
+            active_sub = db.query(UserSubscription).filter(
+                UserSubscription.user_id == str(user.id),
+                UserSubscription.plan_id == str(enterprise_plan.id),
+                UserSubscription.status == "active"
+            ).first()
+
+            if not active_sub:
+                logger.info(f"No active Enterprise plan found for 'mrbtlhh'. Creating one now.")
+                # Deactivate any other active subs
+                db.query(UserSubscription).filter(
+                    UserSubscription.user_id == str(user.id)
+                ).update({"status": "cancelled", "end_date": datetime.utcnow()})
+
+                # Create the new enterprise subscription
+                new_enterprise_sub = UserSubscription(
+                    user_id=str(user.id),
+                    plan_id=str(enterprise_plan.id),
+                    status="active",
+                    end_date=None # Enterprise plan never expires for this user
+                )
+                db.add(new_enterprise_sub)
+                db.commit()
+                logger.info(f"Successfully assigned Enterprise plan to 'mrbtlhh'.")
+            else:
+                logger.info(f"'mrbtlhh' already has an active Enterprise plan.")
+        else:
+            logger.error("Could not assign Enterprise plan to 'mrbtlhh' because the plan was not found in the database.")
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/api/dashboard", response_model=User)
