@@ -348,3 +348,72 @@ class SystemStatus(BaseModel):
     cognisys: SystemStatusModule
     mocked: Optional[bool] = False
     reason: Optional[str] = None
+
+class ShellCommandResponse(BaseModel):
+    output: str
+    error: Optional[str] = None
+
+class ArcanaApiKeyBase(BaseModel):
+    name: str
+    expires_at: Optional[datetime] = None
+    is_active: bool = True
+
+class ArcanaApiKeyCreate(ArcanaApiKeyBase):
+    pass
+
+class ArcanaApiKeyResponse(ArcanaApiKeyBase):
+    id: uuid.UUID
+    key: str # Only expose on creation or specific request
+    user_id: uuid.UUID
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class ArcanaCliCommandRequest(BaseModel):
+    api_key: str
+    command: str
+    args: Optional[List[str]] = None
+    user_id: int
+
+class ArcanaCliCommandResponse(BaseModel):
+
+    status: str
+
+    message: str
+
+    output: Optional[str] = None
+
+    error: Optional[str] = None
+
+
+
+class UserCliConfigBase(BaseModel):
+
+    key: str
+
+    value: str
+
+
+
+class UserCliConfigCreate(UserCliConfigBase):
+
+    pass
+
+
+
+class UserCliConfigResponse(UserCliConfigBase):
+
+    id: uuid.UUID
+
+    user_id: uuid.UUID
+
+    created_at: datetime
+
+    updated_at: datetime
+
+
+
+    class Config:
+
+        orm_mode = True

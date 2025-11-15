@@ -1,6 +1,6 @@
 import logging
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
 import json
@@ -187,6 +187,42 @@ def delete_llm_model(db: Session, model_id: str):
         db.delete(db_model)
         db.commit()
     return db_model
+
+def get_user_preferred_model_details(db: Session, user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves the user's preferred LLM model details, or a default active model.
+    """
+    from server_python.database import UserLLMPreference # Import here to avoid circular dependency
+
+    preferred_model_query = db.query(LLMModel).join(LLMProvider).join(UserLLMPreference, UserLLMPreference.default_model_id == LLMModel.id).filter(UserLLMPreference.user_id == user_id)
+    preferred_model = preferred_model_query.first()
+
+    if preferred_model:
+        model_to_use = preferred_model
+    else:
+        # Fallback to a default active model if no preference is set
+        model_to_use = db.query(LLMModel).join(LLMProvider).filter(
+            LLMModel.is_active == True,
+            LLMProvider.enabled == True,
+            LLMModel.role == 'general' # Assuming 'general' role for default
+        ).first()
+        if not model_to_use:
+            model_to_use = db.query(LLMModel).join(LLMProvider).filter(
+                LLMModel.is_active == True,
+                LLMProvider.enabled == True,
+            ).first() # Any active model if no general one
+
+    if model_to_use:
+        return {
+            "model_name": model_to_use.model_name,
+            "provider_name": model_to_use.provider.name,
+            "model_type": model_to_use.type,
+            "is_active": model_to_use.is_active,
+            "reasoning_support": model_to_use.reasoning,
+            "role": model_to_use.role,
+            "max_tokens": model_to_use.max_tokens,
+        }
+    return None
 
 ### Routing Rule CRUD Operations ###
 

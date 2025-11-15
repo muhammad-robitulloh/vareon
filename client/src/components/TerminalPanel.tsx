@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Terminal as TerminalIcon } from "lucide-react";
 import { Button } from '@/components/ui';
+import { TypewriterEffect } from '@/components/TypewriterEffect';
 
 export default function TerminalPanel() {
   const [output, setOutput] = useState([

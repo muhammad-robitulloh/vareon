@@ -201,6 +201,7 @@ export default function UserProfile() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
+              placeholder="Enter your username"
             />
           </div>
           <div className="space-y-2">
@@ -211,9 +212,11 @@ export default function UserProfile() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
+              placeholder="Enter your email"
             />
           </div>
           <Button onClick={handleProfileUpdate} disabled={loading}>
+            <UserIcon className="h-4 w-4 mr-2" />
             {loading ? 'Saving...' : 'Save Profile'}
           </Button>
         </CardContent>
@@ -236,6 +239,7 @@ export default function UserProfile() {
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               disabled={loading}
+              placeholder="Enter your current password"
             />
           </div>
           <div className="space-y-2">
@@ -246,6 +250,7 @@ export default function UserProfile() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               disabled={loading}
+              placeholder="Enter your new password"
             />
           </div>
           <div className="space-y-2">
@@ -256,9 +261,11 @@ export default function UserProfile() {
               value={confirmNewPassword}
               onChange={(e) => setConfirmNewPassword(e.target.value)}
               disabled={loading}
+              placeholder="Confirm your new password"
             />
           </div>
           <Button onClick={handleChangePassword} disabled={loading}>
+            <Lock className="h-4 w-4 mr-2" />
             {loading ? 'Changing...' : 'Change Password'}
           </Button>
         </CardContent>
@@ -272,29 +279,27 @@ export default function UserProfile() {
             <CreditCard className="h-5 w-5 text-primary" />
             Subscription Management
           </CardTitle>
-          <CardDescription>
-            {isSubscriptionLoading ? (
-              "Loading subscription details..."
-            ) : subscription ? (
-              <>
-                Your current plan: <span className="font-bold text-green-400">{subscription.plan.name}</span> (Status: {subscription.status})
-                {subscription.end_date && (
-                  <>
-                    <br />Renews on: {format(new Date(subscription.end_date), 'PPP')}
-                  </>
-                )}
-                {subscription.plan.demo_credits !== undefined && subscription.plan.demo_credits !== null && (
-                  <>
-                    <br />Remaining Demo Credits: {subscription.plan.demo_credits}
-                  </>
-                )}
-              </>
-            ) : (
-              "No active subscription found."
-            )}
-          </CardDescription>
+          <CardDescription>Manage your subscription and view plan details.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isSubscriptionLoading ? (
+            <p className="text-muted-foreground">Loading subscription details...</p>
+          ) : subscription ? (
+            <div className="space-y-2">
+              <p>
+                Your current plan: <span className="font-bold text-green-400">{subscription.plan.name}</span>
+              </p>
+              <p>Status: <span className="font-bold">{subscription.status}</span></p>
+              {subscription.end_date && (
+                <p>Renews on: <span className="font-bold">{format(new Date(subscription.end_date), 'PPP')}</span></p>
+              )}
+              {subscription.plan.demo_credits !== undefined && subscription.plan.demo_credits !== null && (
+                <p>Remaining Demo Credits: <span className="font-bold">{subscription.plan.demo_credits}</span></p>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No active subscription found.</p>
+          )}
           <Link href="/pricing">
             <Button variant="outline">
               {subscription && subscription.plan.name !== "Enterprise" ? "Upgrade Plan" : "View Plans"}

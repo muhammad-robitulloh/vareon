@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Table, Text, Float
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Table, Text, Float, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
@@ -54,6 +54,7 @@ class User(Base):
     verification_token = Column(String, nullable=True)
     verification_token_expires_at = Column(DateTime, nullable=True)
     roles = relationship("Role", secondary=user_roles, backref="users")
+    arcana_api_keys = relationship("ArcanaApiKey", back_populates="user")
     
     # Subscription-related fields
     demo_credits = Column(Integer, default=0)
@@ -80,6 +81,32 @@ class UserSubscription(Base):
     
     user = relationship("User", back_populates="subscriptions")
     plan = relationship("Plan")
+
+
+class ArcanaApiKey(Base):
+    __tablename__ = "arcana_api_keys"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    key = Column(String, unique=True, nullable=False) # Encrypted API key
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
+    name = Column(String, nullable=False) # User-defined name for the key
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    user = relationship("User", back_populates="arcana_api_keys")
+
+class UserCliConfig(Base):
+    __tablename__ = "user_cli_configs"
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
+    key = Column(String, nullable=False, index=True)
+    value = Column(Text, nullable=False) # Storing as JSON string or plain text
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user = relationship("User", backref="cli_configs")
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'key', name='uq_user_id_key'),
+    )
 
 class Agent(Base):
     __tablename__ = "agents"

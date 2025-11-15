@@ -127,9 +127,33 @@ class SystemPromptUpdate(SystemPromptBase):
     description: Optional[str] = None
 
 class SystemPromptResponse(SystemPromptBase):
+
     id: str
+
     created_at: datetime
+
     updated_at: datetime
 
+
+
     class Config:
+
         orm_mode = True
+
+
+
+class CliModelDetailsResponse(BaseModel):
+
+    model_name: str
+
+    provider_name: str
+
+    model_type: Optional[str] = None
+
+    is_active: bool
+
+    reasoning_support: bool
+
+    role: Optional[str] = None
+
+    max_tokens: Optional[int] = None

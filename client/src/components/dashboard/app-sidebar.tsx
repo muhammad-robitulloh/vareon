@@ -17,7 +17,9 @@ import {
   Terminal,
   User,
   CreditCard, // Import the CreditCard icon
+  CommandIcon, // Import CommandIcon icon for CLI
 } from 'lucide-react';
+import { UsageCreditBar } from './UsageCreditBar'; // Add this line
 
 interface NavItem {
   icon: React.ElementType;
@@ -31,7 +33,6 @@ const navItems: NavItem[] = [
   { icon: Search, label: 'NEOSYNTIS', path: '/dashboard/neosyntis', module: 'neosyntis' },
   { icon: Cpu, label: 'MYNTRIX', path: '/dashboard/myntrix', module: 'myntrix' },
   { icon: Network, label: 'COGNISYS', path: '/dashboard/cognisys', module: 'cognisys' },
-  { icon: Terminal, label: 'ARCANA', path: '/dashboard/arcana', module: 'arcana' },
 ];
 
 export function AppSidebar() {
@@ -64,8 +65,37 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Arcana Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === '/dashboard/arcana'}
+                  onClick={() => setLocation('/dashboard/arcana')}
+                  data-testid="link-arcana"
+                >
+                  <Terminal className="h-4 w-4" />
+                  <span>ARCANA</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === '/dashboard/arcana/cli'}
+                  onClick={() => setLocation('/dashboard/arcana/cli')}
+                  data-testid="link-arcana-cli"
+                >
+                  <CommandIcon className="h-4 w-4" />
+                  <span>Arcana CLI</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
             <SidebarFooter>
+              <UsageCreditBar currentCredit={750} maxCredit={1000} lowCreditThreshold={200} />
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton

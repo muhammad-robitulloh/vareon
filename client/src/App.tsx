@@ -30,6 +30,7 @@ import {
     Arcana,
     UserProfile, // Import UserProfile
   } from '@/pages/dashboard-pages';
+  import ArcanaCliManager from '@/components/dashboard/ArcanaCliManager'; // Import ArcanaCliManager
   
   function Router() {
     return (
@@ -48,6 +49,7 @@ import {
           <Route path="/dashboard/myntrix" component={Myntrix} />
           <Route path="/dashboard/cognisys" component={CognisysPage} />
           <Route path="/dashboard/arcana" component={Arcana} />
+          <Route path="/dashboard/arcana/cli" component={ArcanaCliManager} /> {/* New Arcana CLI Manager Route */}
           <Route path="/dashboard/profile" component={UserProfile} /> {/* New User Profile Route */}
         </ProtectedRoute>
      <Route component={NotFound} />

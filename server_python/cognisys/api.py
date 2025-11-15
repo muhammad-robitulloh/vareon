@@ -272,3 +272,17 @@ def delete_system_prompt(prompt_id: str, current_user: DBUser = Depends(Permissi
     logger.info(f"System prompt {prompt_id} deleted successfully.")
     return {"ok": True}
 
+@router.get("/cli/model-details", response_model=schemas.CliModelDetailsResponse)
+def get_cli_model_details(
+    current_user: DBUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieves details of the user's preferred LLM model for CLI usage.
+    """
+    logger.info(f"User {current_user.id} requested CLI model details.")
+    model_details = crud.get_user_preferred_model_details(db, str(current_user.id))
+    if model_details is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active LLM model found for user or system.")
+    return schemas.CliModelDetailsResponse(**model_details)
+

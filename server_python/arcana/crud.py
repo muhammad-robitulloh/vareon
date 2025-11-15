@@ -3,9 +3,12 @@ import uuid
 import json
 from typing import List, Optional, Dict, Any # Added Dict, Any
 from datetime import datetime
+import hashlib # Import hashlib
 
 from . import schemas
-from server_python.database import ArcanaAgent as DBArcanaAgent, ArcanaAgentJob as DBArcanaAgentJob, ArcanaAgentJobLog as DBArcanaAgentJobLog
+from server_python.schemas import ArcanaApiKeyCreate, UserCliConfigCreate # Import ArcanaApiKeyCreate and UserCliConfigCreate from top-level schemas
+from server_python.database import ArcanaAgent as DBArcanaAgent, ArcanaAgentJob as DBArcanaAgentJob, ArcanaAgentJobLog as DBArcanaAgentJobLog, ArcanaApiKey as DBArcanaApiKey
+from server_python.encryption_utils import encrypt_api_key, decrypt_api_key
 
 def get_agent(db: Session, agent_id: str, owner_id: str):
     """
@@ -218,3 +221,143 @@ def get_agent_jobs_for_agent(db: Session, agent_id: str, owner_id: str, skip: in
         if job.original_request:
             job.original_request = schemas.AgentExecuteRequest.parse_raw(job.original_request)
     return jobs
+
+
+### Arcana API Key CRUD Operations ###
+
+def create_api_key(db: Session, api_key_data: ArcanaApiKeyCreate, owner_id: str) -> DBArcanaApiKey:
+    """
+    Creates a new Arcana API key for a user.
+    """
+    # Generate a UUID for the core of the key
+    key_uuid = str(uuid.uuid4())
+    
+    # Create a simple checksum (e.g., first 4 chars of SHA256 hash of the UUID)
+    checksum = hashlib.sha256(key_uuid.encode()).hexdigest()[:4]
+    
+    # Combine prefix, UUID, and checksum
+    raw_key = f"arc_{key_uuid}.{checksum}"
+    
+    encrypted_key = encrypt_api_key(raw_key)
+
+    db_api_key = DBArcanaApiKey(
+        id=str(uuid.uuid4()),
+        key=encrypted_key,
+        user_id=owner_id,
+        name=api_key_data.name,
+        expires_at=api_key_data.expires_at,
+        is_active=api_key_data.is_active
+    )
+    db.add(db_api_key)
+    db.commit()
+    db.refresh(db_api_key)
+    db_api_key.raw_key = raw_key # Temporarily attach raw key for response
+    return db_api_key
+
+def get_api_key_by_key(db: Session, api_key: str) -> Optional[DBArcanaApiKey]:
+    """
+    Retrieves an Arcana API key by its raw (unencrypted) key.
+    This function iterates through active and non-expired keys and decrypts them for comparison.
+    """
+    now = datetime.utcnow()
+    all_active_keys = db.query(DBArcanaApiKey).filter(
+        DBArcanaApiKey.is_active == True,
+        (DBArcanaApiKey.expires_at == None) | (DBArcanaApiKey.expires_at > now)
+    ).all()
+    for db_key in all_active_keys:
+        try:
+            decrypted_key = decrypt_api_key(db_key.key)
+            if decrypted_key == api_key:
+                return db_key
+        except Exception as e:
+            # Log decryption errors but don't expose them
+            print(f"Error decrypting API key {db_key.id}: {e}")
+            continue
+    return None
+
+def get_api_keys_for_user(db: Session, owner_id: str, skip: int = 0, limit: int = 100) -> List[DBArcanaApiKey]:
+    """
+    Retrieves all Arcana API keys for a specific user.
+    """
+    return db.query(DBArcanaApiKey).filter(DBArcanaApiKey.user_id == owner_id).offset(skip).limit(limit).all()
+
+def deactivate_api_key(db: Session, api_key_id: str, owner_id: str) -> Optional[DBArcanaApiKey]:
+    """
+    Deactivates an Arcana API key.
+    """
+    db_api_key = db.query(DBArcanaApiKey).filter(DBArcanaApiKey.id == api_key_id, DBArcanaApiKey.user_id == owner_id).first()
+    if db_api_key:
+        db_api_key.is_active = False
+        db.commit()
+        db.refresh(db_api_key)
+    return db_api_key
+
+def rotate_api_key(db: Session, api_key_id: str, owner_id: str, new_key_name: str) -> Optional[DBArcanaApiKey]:
+    """
+    Rotates an Arcana API key: deactivates the old one and creates a new one.
+    """
+    old_key = deactivate_api_key(db, api_key_id, owner_id)
+    if not old_key:
+        return None
+    
+    # Create a new key with the specified name
+    new_key_data = schemas.ArcanaApiKeyCreate(name=new_key_name)
+    new_key = create_api_key(db, new_key_data, owner_id)
+    return new_key
+
+### User CLI Configuration CRUD Operations ###
+from server_python.database import UserCliConfig as DBUserCliConfig # Import the UserCliConfig model
+
+def create_or_update_user_cli_config(db: Session, user_id: str, config_data: UserCliConfigCreate) -> DBUserCliConfig:
+    """
+    Creates a new user CLI configuration or updates an existing one.
+    """
+    db_config = db.query(DBUserCliConfig).filter(
+        DBUserCliConfig.user_id == user_id,
+        DBUserCliConfig.key == config_data.key
+    ).first()
+
+    if db_config:
+        db_config.value = config_data.value
+        db.commit()
+        db.refresh(db_config)
+    else:
+        db_config = DBUserCliConfig(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            key=config_data.key,
+            value=config_data.value
+        )
+        db.add(db_config)
+        db.commit()
+        db.refresh(db_config)
+    return db_config
+
+def get_user_cli_config(db: Session, user_id: str, key: str) -> Optional[DBUserCliConfig]:
+    """
+    Retrieves a specific user CLI configuration by key.
+    """
+    return db.query(DBUserCliConfig).filter(
+        DBUserCliConfig.user_id == user_id,
+        DBUserCliConfig.key == key
+    ).first()
+
+def get_all_user_cli_configs(db: Session, user_id: str, skip: int = 0, limit: int = 100) -> List[DBUserCliConfig]:
+    """
+    Retrieves all CLI configurations for a specific user.
+    """
+    return db.query(DBUserCliConfig).filter(DBUserCliConfig.user_id == user_id).offset(skip).limit(limit).all()
+
+def delete_user_cli_config(db: Session, user_id: str, key: str) -> Optional[DBUserCliConfig]:
+    """
+    Deletes a specific user CLI configuration.
+    """
+    db_config = db.query(DBUserCliConfig).filter(
+        DBUserCliConfig.user_id == user_id,
+        DBUserCliConfig.key == key
+    ).first()
+    if db_config:
+        db.delete(db_config)
+        db.commit()
+    return db_config
+
