@@ -404,17 +404,17 @@ export default function ArcanaCliManager() {
             Manage user-specific configurations for your Arcana CLI Agent.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col space-y-4">
+        <CardContent className="space-y-6"> {/* Increased space-y for better separation */}
+          <div className="grid gap-4"> {/* Use grid for better alignment */}
             {/* Default Agent ID Configuration */}
-            <div className="flex items-center space-x-2">
-              <label htmlFor="default-agent-id" className="w-40 text-right text-sm">Default Agent:</label>
+            <div className="grid grid-cols-[120px_1fr_auto] items-center gap-4"> {/* Specific grid columns */}
+              <label htmlFor="default-agent-id" className="text-right text-sm">Default Agent:</label>
               <Select
                 value={defaultAgentId}
                 onValueChange={setDefaultAgentId}
                 disabled={settingConfig}
               >
-                <SelectTrigger className="w-[240px]">
+                <SelectTrigger>
                   <SelectValue placeholder="Select a default agent" />
                 </SelectTrigger>
                 <SelectContent>
@@ -429,19 +429,19 @@ export default function ArcanaCliManager() {
                 disabled={settingConfig || !defaultAgentId}
               >
                 {settingConfig && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Set Default Agent
+                Set Agent
               </Button>
             </div>
 
             {/* Preferred Model Configuration */}
-            <div className="flex items-center space-x-2">
-              <label htmlFor="preferred-model" className="w-40 text-right text-sm">Preferred Model:</label>
+            <div className="grid grid-cols-[120px_1fr_auto] items-center gap-4"> {/* Specific grid columns */}
+              <label htmlFor="preferred-model" className="text-right text-sm">Preferred Model:</label>
               <Select
                 value={preferredModel}
                 onValueChange={setPreferredModel}
                 disabled={settingConfig}
               >
-                <SelectTrigger className="w-[240px]">
+                <SelectTrigger>
                   <SelectValue placeholder="Select a preferred model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -456,20 +456,19 @@ export default function ArcanaCliManager() {
                 disabled={settingConfig || !preferredModel}
               >
                 {settingConfig && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Set Preferred Model
+                Set Model
               </Button>
             </div>
 
             {/* Generic Key-Value Configuration */}
-            <div className="flex items-center space-x-2">
-              <label htmlFor="custom-config" className="w-40 text-right text-sm">Custom Config:</label>
+            <div className="grid grid-cols-[120px_1fr_1fr_auto] items-center gap-4"> {/* Specific grid columns for two inputs */}
+              <label htmlFor="custom-config" className="text-right text-sm">Custom Config:</label>
               <Input
                 id="custom-config-key"
                 placeholder="Configuration Key"
                 value={newConfigKey}
                 onChange={(e) => setNewConfigKey(e.target.value)}
                 disabled={settingConfig}
-                className="w-[180px]"
               />
               <Input
                 id="custom-config-value"
@@ -477,14 +476,13 @@ export default function ArcanaCliManager() {
                 value={newConfigValue}
                 onChange={(e) => setNewConfigValue(e.target.value)}
                 disabled={settingConfig}
-                className="flex-grow"
               />
               <Button
                 onClick={() => handleSetConfig(newConfigKey, newConfigValue)}
                 disabled={settingConfig || !newConfigKey.trim() || !newConfigValue.trim()}
               >
                 {settingConfig && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Set Custom Config
+                Set Custom
               </Button>
             </div>
           </div>

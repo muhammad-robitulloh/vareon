@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional # Added Optional
 import json
 import os
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, BackgroundTasks
 
 from server_python.database import LLMProvider, LLMModel, RoutingRule, User # Changed from ..database
 from .crud import decrypt_api_key # Import the decrypt function
@@ -285,7 +285,13 @@ from .tools import tools_schema, tool_registry
 import asyncio
 import json
 
-async def process_chat_request(db: Session, user: User, prompt: str, session_data: Dict[str, Any]) -> Dict[str, Any]:
+async def process_chat_request(
+    db: Session, 
+    user: User, 
+    prompt: str, 
+    session_data: Dict[str, Any],
+    background_tasks: BackgroundTasks # Added background_tasks
+) -> Dict[str, Any]:
     
     terminal_service = session_data.get("terminal")
     if not terminal_service:
@@ -416,6 +422,8 @@ async def process_chat_request(db: Session, user: User, prompt: str, session_dat
     llm_provider = db.query(LLMProvider).filter(LLMProvider.id == selected_llm_model.provider_id).first()
     if not llm_provider: raise HTTPException(status_code=500, detail=f"LLM Provider not found for model {selected_llm_model.model_name}")
     api_key = decrypt_api_key(llm_provider.api_key_encrypted)
+    # DEBUGGING: Print the decrypted key to verify it's not empty
+    print(f"DEBUG: Decrypted API Key (first 5 chars): {api_key[:5] if api_key else 'None'}")
     print(f"DEBUG: Type of api_key after decryption: {type(api_key)}")
     print(f"DEBUG: Value of api_key after decryption (first 5 chars): {api_key[:5] if api_key else 'None'}")
 
@@ -469,7 +477,14 @@ async def process_chat_request(db: Session, user: User, prompt: str, session_dat
             else:
                 try:
                     function_args = json.loads(tool_call['function']['arguments'])
-                    result_content = await function_to_call(terminal_service=terminal_service, **function_args)
+                    # Pass the full context to the tool function
+                    result_content = await function_to_call(
+                        db=db, 
+                        user=user, 
+                        terminal_service=terminal_service, 
+                        background_tasks=background_tasks,
+                        **function_args
+                    )
                 except Exception as e:
                     result_content = f"Error executing tool '{function_name}': {e}"
 

@@ -389,8 +389,18 @@ class ArcanaAgentJob(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
     final_output = Column(Text, nullable=True)
+
+    # New column for parent-child relationship
+    parent_job_id = Column(String(36), ForeignKey("arcana_agent_jobs.id"), nullable=True)
+
+    # Relationships
     agent = relationship("ArcanaAgent", backref="jobs")
     owner = relationship("User", backref="arcana_agent_jobs")
+    logs = relationship("ArcanaAgentJobLog", back_populates="job", cascade="all, delete-orphan")
+
+    # New relationships for hierarchical jobs
+    parent_job = relationship("ArcanaAgentJob", remote_side=[id], back_populates="child_jobs")
+    child_jobs = relationship("ArcanaAgentJob", back_populates="parent_job", cascade="all, delete-orphan")
 
 class ArcanaAgentJobLog(Base):
     __tablename__ = "arcana_agent_job_logs"
@@ -399,7 +409,7 @@ class ArcanaAgentJobLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     log_type = Column(String, nullable=False) # e.g., 'thought', 'command', 'output', 'human_input_needed', 'error'
     content = Column(Text, nullable=False)
-    job = relationship("ArcanaAgentJob", backref="logs")
+    job = relationship("ArcanaAgentJob", back_populates="logs")
 
 
 class SystemPrompt(Base):
@@ -580,7 +590,7 @@ def populate_initial_llm_data(db: Session):
         openrouter_provider = LLMProvider(
             id=str(uuid.uuid4()),
             name="OpenRouter",
-            api_key_encrypted="", # API key will be set via dashboard
+            api_key_encrypted=encrypt_api_key(""), # API key will be set via dashboard
             base_url="https://openrouter.ai/api/v1",
             enabled=True,
             organization_id=None
@@ -589,6 +599,38 @@ def populate_initial_llm_data(db: Session):
         db.commit()
         db.refresh(openrouter_provider)
         print("Created default LLM Provider: OpenRouter")
+
+    # Check for and create a default model linked to the provider
+    default_model_name = "kwaipilot/kat-coder-pro:free"
+    default_model = db.query(LLMModel).filter(LLMModel.model_name == default_model_name).first()
+    if not default_model:
+        default_model = LLMModel(
+            id=str(uuid.uuid4()),
+            provider_id=openrouter_provider.id,
+            model_name=default_model_name,
+            type="chat",
+            is_active=True,
+            reasoning=True,
+            role="general"
+        )
+        db.add(default_model)
+        db.commit()
+        db.refresh(default_model)
+        print(f"Created default LLM Model: {default_model_name}")
+
+    # Set the new model as the default for 'testuser'
+    test_user = db.query(User).filter(User.username == 'testuser').first()
+    if test_user:
+        user_prefs = db.query(UserLLMPreference).filter(UserLLMPreference.user_id == str(test_user.id)).first()
+        if not user_prefs:
+            user_prefs = UserLLMPreference(user_id=str(test_user.id))
+            db.add(user_prefs)
+        
+        if user_prefs.default_model_id != default_model.id:
+            user_prefs.default_model_id = default_model.id
+            db.commit()
+            print(f"Set '{default_model_name}' as the default model for 'testuser'.")
+
 
     # Create default intent detection system prompt
     intent_prompt_name = "intent_detection_prompt"
@@ -624,31 +666,3 @@ Example JSON output:
         db.commit()
         db.refresh(db_default_intent_prompt)
         print(f"Created default System Prompt: {intent_prompt_name}")
-
-    # Add other default models as needed
-    # For example, a default model for local LLMs if applicable
-    # local_llm_provider = db.query(LLMProvider).filter(LLMProvider.name == "Local LLM").first()
-    # if not local_llm_provider:
-    #     local_llm_provider = LLMProvider(
-    #         id=str(uuid.uuid4()),
-    #         name="Local LLM",
-    #         api_key_encrypted="",
-    #         base_url="http://localhost:8000/v1", # Example local LLM endpoint
-    #     )
-    #     db.add(local_llm_provider)
-    #     db.commit()
-    #     db.refresh(local_llm_provider)
-    #     print("Created default LLM Provider: Local LLM")
-
-    # if not db.query(LLMModel).filter(LLMModel.model_name == "local-model").first():
-    #     local_model = LLMModel(
-    #         id=str(uuid.uuid4()),
-    #         provider_id=local_llm_provider.id,
-    #         model_name="local-model",
-    #         max_tokens=8192,
-    #         cost_per_token=0.0,
-    #     )
-    #     db.add(local_model)
-    #     db.commit()
-    #     db.refresh(local_model)
-    #     print("Created default LLM Model: local-model for Local LLM")

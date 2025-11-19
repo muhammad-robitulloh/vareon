@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 import logging
@@ -42,6 +42,10 @@ def read_llm_provider(provider_id: str, current_user: DBUser = Depends(get_curre
 
 @router.put("/providers/{provider_id}", response_model=schemas.LLMProviderResponse)
 def update_llm_provider(provider_id: str, provider: schemas.LLMProviderUpdate, current_user: DBUser = Depends(PermissionChecker(["admin_access"])), db: Session = Depends(get_db)):
+    logger.info(f"Attempting to update LLM provider {provider_id} by user {current_user.id}.")
+    logger.info(f"User {current_user.id} roles: {[role.name for role in current_user.roles]}")
+    from server_python.auth import has_permission # Import has_permission for direct check
+    logger.info(f"User {current_user.id} has 'admin_access' permission: {has_permission(current_user, 'admin_access')}")
     logger.info(f"Admin user {current_user.id} updating LLM provider {provider_id}.")
     db_provider = crud.update_llm_provider(db, provider_id=provider_id, provider=provider)
     if db_provider is None:
@@ -197,7 +201,12 @@ def delete_routing_rule(rule_id: str, current_user: DBUser = Depends(get_current
 ### Test Console & AI Interaction ###
 
 @router.post("/chat", response_model=schemas.ChatResponse)
-async def chat_with_cognisys(chat_request: schemas.ChatRequest, current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+async def chat_with_cognisys(
+    chat_request: schemas.ChatRequest, 
+    background_tasks: BackgroundTasks, # Inject BackgroundTasks
+    current_user: DBUser = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
     logger.info(f"User {current_user.id} initiated a chat with prompt: '{chat_request.prompt[:50]}...'.")
     if current_user is None:
         raise HTTPException(
@@ -210,7 +219,14 @@ async def chat_with_cognisys(chat_request: schemas.ChatRequest, current_user: DB
     terminal_service = TerminalService(session_id=str(current_user.id), user_id=str(current_user.id))
     session_data = {"terminal": terminal_service}
 
-    response_data = await llm_interaction.process_chat_request(db, current_user, chat_request.prompt, session_data=session_data)
+    # Pass background_tasks to the processing function
+    response_data = await llm_interaction.process_chat_request(
+        db=db, 
+        user=current_user, 
+        prompt=chat_request.prompt, 
+        session_data=session_data,
+        background_tasks=background_tasks
+    )
     logger.info(f"Chat response generated for user {current_user.id}.")
     return schemas.ChatResponse(**response_data)
 

@@ -1,0 +1,6 @@
+# Allow all user agents (crawlers) to access the entire site.
+User-agent: *
+Allow: /
+
+# Point crawlers to the sitemap for a list of pages.
+Sitemap: /sitemap.xml

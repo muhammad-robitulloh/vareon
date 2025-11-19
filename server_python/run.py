@@ -172,7 +172,7 @@ def main():
             except Exception as e:
                 logger.error(f"Failed to start cloudflared tunnel: {e}", exc_info=True)
 
-        logger.info("\n=========================================")
+        logger.info("=========================================")
         logger.info("          Vareon is running!            ")
         logger.info("=========================================")
         logger.info(f"- Backend (Python): http://{args.host}:{args.port}")

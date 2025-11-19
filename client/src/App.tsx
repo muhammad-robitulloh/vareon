@@ -7,6 +7,7 @@ import { CommandPalette } from "@/components/dashboard/command-palette";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { Navbar } from "@/components/dashboard/navbar";
 import { MainSidebarContent, ProtectedRoute } from '@/components';
+import { Helmet } from "react-helmet-async";
 
 import {
   Home,
@@ -14,11 +15,13 @@ import {
   NeosyntisDemo,
   MyntrixDemo,
   NotFound,
-    Auth,
-    VerifyEmail,
-    WaitingForVerification,
-    PricingPage, // Import the new PricingPage
-  } from '@/pages';
+  Auth,
+  VerifyEmail,
+  WaitingForVerification,
+  PricingPage,
+  AuraPage, // Add this
+  NexaPage, // Add this
+} from '@/pages';
   
   
   import {
@@ -51,6 +54,8 @@ import {
           <Route path="/dashboard/arcana" component={Arcana} />
           <Route path="/dashboard/arcana/cli" component={ArcanaCliManager} /> {/* New Arcana CLI Manager Route */}
           <Route path="/dashboard/profile" component={UserProfile} /> {/* New User Profile Route */}
+          <Route path="/dashboard/aura" component={AuraPage} /> {/* New Aura Route */}
+          <Route path="/dashboard/nexa" component={NexaPage} /> {/* New Nexa Route */}
         </ProtectedRoute>
      <Route component={NotFound} />
       </Switch>
@@ -66,6 +71,12 @@ import {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <Helmet
+        titleTemplate="%s | VAREON"
+        defaultTitle="VAREON - Engineering Adaptive Intelligence"
+      >
+        <meta name="description" content="Vareon is an advanced platform to build, manage, and orchestrate multi-agent AI systems. Connect, automate, and visualize your agentic workflows." />
+      </Helmet>
       <ThemeProvider>
         <TooltipProvider>
           <SidebarProvider style={style as React.CSSProperties}>

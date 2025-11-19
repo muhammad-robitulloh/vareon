@@ -9,6 +9,7 @@ import uuid
 
 from server_python import database, schemas
 from server_python.auth import get_current_user
+from sqlalchemy.orm import joinedload # Add this import
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -107,10 +108,39 @@ def select_plan(
     )
     db.add(new_subscription)
     
-    # Update user's demo credits based on the new plan
-    user_db = db.query(database.User).filter(database.User.id == str(current_user.id)).first()
+    user_db = db.query(database.User).options(joinedload(database.User.roles)).filter(database.User.id == str(current_user.id)).first()
     if user_db:
         user_db.demo_credits = plan_to_assign.demo_credits if plan_to_assign.demo_credits is not None else 0
+
+        # --- Role Assignment Logic ---
+        admin_role = db.query(database.Role).filter(database.Role.name == "admin").first()
+        if not admin_role:
+            logger.warning("Admin role not found in database. Creating it.")
+            admin_role = database.Role(name="admin")
+            db.add(admin_role)
+            db.flush() # Flush to get the ID for the new role
+
+            # Ensure 'admin_access' permission exists and assign it to the admin role
+            admin_access_perm = db.query(database.Permission).filter(database.Permission.name == "admin_access").first()
+            if not admin_access_perm:
+                logger.warning("Admin access permission not found in database. Creating it.")
+                admin_access_perm = database.Permission(name="admin_access")
+                db.add(admin_access_perm)
+                db.flush() # Flush to get the ID for the new permission
+
+            if admin_access_perm not in admin_role.permissions:
+                admin_role.permissions.append(admin_access_perm)
+                logger.info("Assigned 'admin_access' permission to 'admin' role.")
+
+        if plan_to_assign.name == "Enterprise":
+            if admin_role not in user_db.roles:
+                user_db.roles.append(admin_role)
+                logger.info(f"Assigned 'admin' role to user {current_user.id} due to Enterprise plan.")
+        else:
+            if admin_role in user_db.roles:
+                user_db.roles.remove(admin_role)
+                logger.info(f"Removed 'admin' role from user {current_user.id} due to non-Enterprise plan.")
+        # --- End Role Assignment Logic ---
 
     db.commit()
     db.refresh(new_subscription)

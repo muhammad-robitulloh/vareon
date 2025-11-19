@@ -1,0 +1,21 @@
+{
+  "short_name": "Vareon",
+  "name": "VAREON - Engineering Adaptive Intelligence",
+  "description": "VAREON ecosystem - Arcana AI, NEOSYNTIS Lab, and MYNTRIX manufacturing execution platform. Advanced AI-powered cognitive intelligence for enterprise.",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}

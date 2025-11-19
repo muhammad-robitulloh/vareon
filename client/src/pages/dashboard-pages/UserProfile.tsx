@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button, Input, Label } from '@/components/ui';
 import { useToast } from '@/hooks/use-toast';
-import { User as UserIcon, Mail, Lock, LogOut, CreditCard } from 'lucide-react';
+import { User as UserIcon, Mail, Lock, LogOut, CreditCard, Code } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useLocation, Link } from 'wouter';
 import GithubSettingsTab from '@/components/dashboard/user-profile/GithubSettingsTab';
@@ -66,6 +66,7 @@ export default function UserProfile() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDeveloper, setIsDeveloper] = useState(false); // State for developer license
 
   // Fetch user's current subscription
   const { data: subscription, isLoading: isSubscriptionLoading, error: subscriptionError } = useQuery<UserSubscription>({
@@ -321,6 +322,29 @@ export default function UserProfile() {
             <LogOut className="h-4 w-4 mr-2" />
             Logout
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* New Developer Program Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Code className="h-5 w-5 text-primary" />
+            Developer Program
+          </CardTitle>
+          <CardDescription>
+            Join the Vareon Developer Program to access SDKs for ecosystem modules and earn rewards.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => setIsDeveloper(prev => !prev)}>
+            {isDeveloper ? 'Leave Developer Program' : 'Join as Vareon Developer'}
+          </Button>
+          {isDeveloper && (
+            <p className="text-sm text-muted-foreground mt-2">
+              You have access to Aura (SDK) and Nexa (Rewards) pages.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

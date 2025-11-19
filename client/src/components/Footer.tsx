@@ -6,9 +6,9 @@ export default function Footer() {
     {
       title: "Product",
       links: [
-        { label: "Arcana AI", href: "/arcana" },
-        { label: "NEOSYNTIS", href: "/neosyntis" },
-        { label: "MYNTRIX", href: "/myntrix" },
+        { label: "Arcana AI", href: "/arcana-demo" },
+        { label: "NEOSYNTIS", href: "/neosyntis-demo" },
+        { label: "MYNTRIX", href: "/myntrix-demo" },
       ],
     },
     {
@@ -16,7 +16,7 @@ export default function Footer() {
       links: [
         { label: "Documentation", href: "#" },
         { label: "API Reference", href: "#" },
-        { label: "GitHub", href: "#" },
+        { label: "GitHub", href: "https://github.com/orgs/VAREON-co/dashboard" },
       ],
     },
     {
@@ -44,13 +44,13 @@ export default function Footer() {
               Engineering Adaptive Intelligence for the modern enterprise.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-muted-foreground hover:text-foreground">
+              <a href="https://github.com/muhammad-robitulloh" className="text-muted-foreground hover:text-foreground">
                 <Github className="h-5 w-5" />
               </a>
-              <a href="#" className="text-muted-foreground hover:text-foreground">
+              <a href="https://x.com/mrbtlhh?t=cw7vpkOcpoC0gzT3wlTMvw&s=09" className="text-muted-foreground hover:text-foreground">
                 <Twitter className="h-5 w-5" />
               </a>
-              <a href="#" className="text-muted-foreground hover:text-foreground">
+              <a href="https://www.linkedin.com/in/muhammad-robitulloh" className="text-muted-foreground hover:text-foreground">
                 <Linkedin className="h-5 w-5" />
               </a>
             </div>

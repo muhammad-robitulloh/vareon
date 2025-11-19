@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 import uuid
 from datetime import datetime
 
@@ -157,3 +157,26 @@ class CliModelDetailsResponse(BaseModel):
     role: Optional[str] = None
 
     max_tokens: Optional[int] = None
+
+# --- Agent to Agent (A2A) Communication Schemas ---
+
+class AgentTask(BaseModel):
+    """
+    Defines a standardized task to be delegated from an orchestrator to a worker agent.
+    """
+    task_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="Unique identifier for this specific task.")
+    prompt: str = Field(..., description="The core natural language prompt or instruction for the task.")
+    context: Optional[Dict[str, Any]] = Field(None, description="Supporting context, such as file contents, previous results, or user preferences.")
+    required_specialty: str = Field(..., description="The specialty required to perform this task (e.g., 'coding', 'file_management', 'git_operations').")
+    target_agent_id: str = Field(..., description="The ID of the target agent (e.g., an Arcana agent ID) to execute the task.")
+
+
+class AgentResult(BaseModel):
+    """
+    Defines the standardized result returned by a worker agent to the orchestrator.
+    """
+    task_id: uuid.UUID = Field(..., description="The ID of the task this result corresponds to.")
+    status: Literal["success", "failure", "in_progress"] = Field(..., description="The final status of the task execution.")
+    output: str = Field(..., description="The primary textual output or summary of the result.")
+    artifacts: Optional[List[str]] = Field(None, description="A list of paths or identifiers for any created or modified artifacts (e.g., file paths).")
+    error_message: Optional[str] = Field(None, description="An error message if the task failed.")

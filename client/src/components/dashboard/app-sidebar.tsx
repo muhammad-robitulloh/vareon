@@ -1,4 +1,5 @@
 import { useLocation } from 'wouter';
+import { useState } from 'react';
 import {
   SidebarContent,
   SidebarGroup,
@@ -18,6 +19,8 @@ import {
   User,
   CreditCard, // Import the CreditCard icon
   CommandIcon, // Import CommandIcon icon for CLI
+  Code, // Import Code icon for Aura
+  Gem, // Import Gem icon for Nexa
 } from 'lucide-react';
 import { UsageCreditBar } from './UsageCreditBar'; // Add this line
 
@@ -37,6 +40,7 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
+  const [isDeveloper, setIsDeveloper] = useState(true); // Mock state for developer license
 
   return (
     <>
@@ -93,6 +97,36 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isDeveloper && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Developer Tools</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={location === '/dashboard/aura'}
+                    onClick={() => setLocation('/dashboard/aura')}
+                    data-testid="link-aura"
+                  >
+                    <Code className="h-4 w-4" />
+                    <span>AURA (SDK)</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={location === '/dashboard/nexa'}
+                    onClick={() => setLocation('/dashboard/nexa')}
+                    data-testid="link-nexa"
+                  >
+                    <Gem className="h-4 w-4" />
+                    <span>NEXA (Rewards)</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
             <SidebarFooter>
               <UsageCreditBar currentCredit={750} maxCredit={1000} lowCreditThreshold={200} />

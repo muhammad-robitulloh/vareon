@@ -13,7 +13,6 @@ from .code_generation_service import generate_code
 from .shell_translation_service import translate_shell_command
 from .file_management_service import perform_file_operation
 from .reasoning_service import generate_reasoning
-from server_python.cognisys.tools import tool_registry # Import the tool_registry
 from server_python.git_service.service import GitService # Import GitService
 from terminal.service import TerminalService # Import TerminalService
 from server_python.context_memory import crud as context_crud # Import context_memory crud
@@ -274,10 +273,7 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                     await crud.add_agent_job_log(db, job_id, "command", f"Executing tool '{function_name}' with args: {function_args}")
                     result_content = f"Error: Tool '{function_name}' not found."
 
-                    # Dynamically call tool functions
-                    tool_func = agent_tool_registry.get(function_name) # Check agent-specific registry first
-                    if not tool_func:
-                        tool_func = tool_registry.get(function_name) # Fallback to generic registry
+                    tool_func = agent_tool_registry.get(function_name) # Check agent-specific registry
 
                     if tool_func:
                         try:

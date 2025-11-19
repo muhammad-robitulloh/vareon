@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status, Request, WebSocket
-from schemas import TokenData
+from .schemas import TokenData
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import os
@@ -167,12 +167,13 @@ def decode_access_token(token: str) -> dict:
 
 from . import database # Import the database module
 from .database import get_user_from_db, User # Keep other necessary imports
+from sqlalchemy.orm import joinedload # Add this import
 
 # ... (rest of the file) ...
 
 # --- User Authentication and Authorization ---
 
-async def _get_user_from_token(token: str, db: Session) -> User:
+async def _get_user_from_token(token: str, db: Session) -> database.User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -185,7 +186,9 @@ async def _get_user_from_token(token: str, db: Session) -> User:
             logger.warning("Username not found in JWT payload, raising credentials_exception.")
             raise credentials_exception
         token_data = TokenData(username=username)
-        user = db.query(User).filter(User.username == token_data.username).first()
+        user = db.query(User).options(
+            joinedload(User.roles).joinedload(database.Role.permissions)
+        ).filter(User.username == token_data.username).first()
         if user is None:
             logger.warning(f"User {token_data.username} not found in database, raising credentials_exception.")
             raise credentials_exception
@@ -198,7 +201,7 @@ async def _get_user_from_token(token: str, db: Session) -> User:
         logger.error(f"Unexpected error in _get_user_from_token: {e}", exc_info=True)
         raise credentials_exception
 
-async def get_current_user(request: Request, db: Session = Depends(database.get_db)):
+async def get_current_user(request: Request, db: Session = Depends(database.get_db)) -> database.User:
     token: Optional[str] = None
     authorization: Optional[str] = request.headers.get("Authorization")
     if authorization and authorization.startswith("Bearer "):
@@ -248,7 +251,15 @@ class PermissionChecker:
     def __init__(self, required_permissions: List[str]):
         self.required_permissions = required_permissions
 
-    def __call__(self, current_user: User = Depends(get_current_user)):
+    def __call__(self, current_user: database.User = Depends(get_current_user)):
+        logger.debug(f"PermissionChecker: User {current_user.id} attempting to access protected route.")
+        logger.debug(f"PermissionChecker: User roles: {[role.name for role in current_user.roles]}")
+        user_permissions = [p.name for role in current_user.roles for p in role.permissions]
+        logger.debug(f"PermissionChecker: User permissions: {user_permissions}")
+        logger.debug(f"PermissionChecker: Required permissions: {self.required_permissions}")
+
         if not all(has_permission(current_user, perm) for perm in self.required_permissions):
+            logger.warning(f"PermissionChecker: User {current_user.id} LACKS required permissions: {self.required_permissions}. User has: {user_permissions}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+        logger.debug(f"PermissionChecker: User {current_user.id} HAS required permissions.")
         return current_user
