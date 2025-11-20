@@ -6,7 +6,8 @@
   "env": {
     "PYTHONUNBUFFERED": "1",
     "PYTHONPATH": ".",
-    "NODE_OPTIONS": "--max-old-space-size=256"
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "GIT_PYTHON_GIT_EXECUTABLE": "/usr/bin/git"
   },
   "packages": {
     "python": "3.11",
