@@ -16,6 +16,8 @@ import FileTree from './FileTree';
 import GitOperationsPanel from './GitOperationsPanel';
 import CreateEditAgentDialog from './CreateEditAgentDialog'; // Import the new dialog component
 import FileEditor from './FileEditor'; // Import the new FileEditor component
+import ChatInterfaceTab from './chat-interface-tab'; // Import the chat tab
+import AgentChatInterfaceTab from './AgentChatInterfaceTab';
 
 // Define types for job logs and job status received via WebSocket
 interface AgentLog {
@@ -57,7 +59,7 @@ const ArcanaAgentTab: React.FC = () => {
   const { data: agents, isLoading: isLoadingAgents } = useQuery<ArcanaAgent[]>({
     queryKey: ['arcanaAgents'],
     queryFn: async () => {
-      const response = await fetch('/api/arcana/agents', {
+      const response = await fetch('/api/arcana/agents/', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Failed to fetch agents');
@@ -70,7 +72,7 @@ const ArcanaAgentTab: React.FC = () => {
     queryKey: ['arcanaJobs', selectedAgent?.id],
     queryFn: async () => {
       if (!selectedAgent) return [];
-      const response = await fetch(`/api/arcana/agents/${selectedAgent.id}/jobs`, {
+      const response = await fetch(`/api/arcana/agents/${selectedAgent.id}/jobs/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Failed to fetch jobs');
@@ -234,6 +236,7 @@ const ArcanaAgentTab: React.FC = () => {
   const currentJobStatus = liveJobStatus || initialSelectedJob?.status || 'unknown';
   const displayedJobLogs = liveJobLogs.length > 0 ? liveJobLogs : (initialJobLogs || []);
 
+
   return (
     <>
       <PanelGroup direction="horizontal" className="h-full w-full">
@@ -269,164 +272,169 @@ const ArcanaAgentTab: React.FC = () => {
         <PanelResizeHandle className="w-2 bg-gray-200 hover:bg-gray-300" />
 
         {/* Agent Details & Tasks Panel */}
-        <Panel defaultSize={35}>
-          <div className="h-full p-4">
-            {selectedAgent ? (
-              <div className="flex flex-col h-full gap-4">
-                <Card className="flex-1">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BotMessageSquare className="h-5 w-5" /> Agent Details & Tasks</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p><strong>ID:</strong> <span className="font-mono text-xs">{selectedAgent.id}</span></p>
-                    <p><strong>Name:</strong> {selectedAgent.name}</p>
-                    <p><strong>Persona:</strong> {selectedAgent.persona}</p>
-                    <Separator className="my-4" />
-                    <div className="space-y-2">
-                      <p><strong>Status:</strong> <Badge>{selectedAgent.status}</Badge></p>
-                      <p><strong>Mode:</strong> <Badge>{selectedAgent.mode}</Badge></p>
-                      <p><strong>Objective:</strong> {selectedAgent.objective}</p>
-                    </div>
-                    <Separator className="my-4" />
-                    <Label htmlFor="newTaskGoal">Submit New Task</Label>
-                    <Textarea id="newTaskGoal" placeholder="e.g., Refactor the Button component to use Tailwind CSS." className="my-2" value={newTaskGoal} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewTaskGoal(e.target.value)} />
-                    <div className="flex gap-2">
-                      <Button className="flex-1" onClick={handleRunAgent} disabled={executeMutation.isPending}>
-                        {executeMutation.isPending ? "Starting..." : <><Play className="mr-2 h-4 w-4" /> Run Agent</>}
-                      </Button>
-                      <Button variant="outline" onClick={handleEditAgent}>
-                        <Edit className="mr-2 h-4 w-4" /> Edit Agent
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle>Jobs</CardTitle></CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-48">
-                      {isLoadingJobs ? <p>Loading jobs...</p> : (
-                        <Table>
-                          <TableHeader><TableRow><TableHead>Job ID</TableHead><TableHead>Goal</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                          <TableBody>
-                            {jobs?.map(job => (
-                              <TableRow key={job.id} onClick={() => setSelectedJobId(job.id)} className={selectedJobId === job.id ? 'bg-accent/50 cursor-pointer' : 'cursor-pointer'}>
-                                <TableCell className="font-mono text-xs">{job.id.substring(0, 8)}...</TableCell>
-                                <TableCell>{job.goal.substring(0, 30)}...</TableCell>
-                                <TableCell><Badge>{job.status}</Badge></TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </div>
+        <Panel defaultSize={75}>
+          {selectedAgent ? (
+            selectedAgent.mode === 'chat' ? (
+              <AgentChatInterfaceTab agent={selectedAgent} />
             ) : (
-              <Card className="h-full flex items-center justify-center"><p className="text-muted-foreground">Select an agent to begin.</p></Card>
-            )}
-          </div>
-        </Panel>
-        <PanelResizeHandle className="w-2 bg-gray-200 hover:bg-gray-300" />
-
-        {/* Log & File Tree / File Editor Panel */}
-        <Panel defaultSize={40}>
-          {selectedFile && selectedRepoPath ? (
-            <FileEditor filePath={selectedFile} localPath={selectedRepoPath} onClose={() => setSelectedFile(null)} />
-          ) : selectedJobId ? (
-            <div className="flex flex-col h-full p-4 gap-4">
-              <Card className="flex-1 flex flex-col">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><ScrollText className="h-5 w-5" /> Agent Log & Thoughts</CardTitle>
-                  {currentJobStatus && <CardDescription>Status: <Badge>{currentJobStatus}</Badge></CardDescription>}
-                </CardHeader>
-                <CardContent className="flex-1 overflow-hidden">
-                  <ScrollArea className="h-full p-2 border rounded-md bg-black font-mono text-sm" ref={scrollAreaRef}>
-                    {(isLoadingInitialLogs && displayedJobLogs.length === 0) ? <p className="text-white">Loading logs...</p> : displayedJobLogs.map((log, index) => (
-                      <div key={log.log_id || index} className="whitespace-pre-wrap text-white">
-                        <span className="text-green-400">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                        <span className={`ml-2 font-bold ${
-                          log.log_type === 'thought' ? 'text-purple-400' :
-                          log.log_type === 'action' ? 'text-blue-400' :
-                          log.log_type === 'error' ? 'text-red-500' :
-                          'text-gray-300'
-                        }`}>
-                          [{log.log_type.toUpperCase()}]
-                        </span>
-                        <span className="ml-2">{log.content}</span>
-                      </div>
-                    ))}
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-              {currentJobStatus === 'awaiting_human_input' && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Agent Awaiting Input</CardTitle>
-                    <CardDescription>The agent needs your clarification or approval to proceed.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {/* The last log entry of type 'human_input_needed' will contain the context */}
-                    {displayedJobLogs.length > 0 && displayedJobLogs[displayedJobLogs.length - 1].log_type === 'human_input_needed' && (
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{displayedJobLogs[displayedJobLogs.length - 1].content}</p>
-                    )}
-                    <Textarea
-                      placeholder="Type your input or clarification here..."
-                      value={humanInput}
-                      onChange={(e) => setHumanInput(e.target.value)}
-                      rows={3}
-                      disabled={submitHumanInputMutation.isPending}
-                    />
-                    <Button
-                      className="w-full"
-                      onClick={handleHumanInputSubmit}
-                      disabled={submitHumanInputMutation.isPending || !humanInput.trim()}
-                    >
-                      {submitHumanInputMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Submit Input & Resume
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-              <PanelGroup direction="vertical">
-                <Panel>
-                  <div className="h-full">
-                    <FileTree onFileSelect={setSelectedFile} selectedFile={selectedFile} selectedRepoPath={selectedRepoPath} setSelectedRepoPath={setSelectedRepoPath} selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch} />
-                    <GitOperationsPanel localPath={selectedRepoPath} currentBranch={selectedBranch} onBranchChange={setSelectedBranch} />
+              <PanelGroup direction="horizontal">
+                <Panel defaultSize={50}>
+                  <div className="h-full p-4">
+                    <div className="flex flex-col h-full gap-4">
+                      <Card className="flex-1">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2"><BotMessageSquare className="h-5 w-5" /> Agent Details & Tasks</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p><strong>ID:</strong> <span className="font-mono text-xs">{selectedAgent.id}</span></p>
+                          <p><strong>Name:</strong> {selectedAgent.name}</p>
+                          <p><strong>Persona:</strong> {selectedAgent.persona}</p>
+                          <Separator className="my-4" />
+                          <div className="space-y-2">
+                            <p><strong>Status:</strong> <Badge>{selectedAgent.status}</Badge></p>
+                            <p><strong>Mode:</strong> <Badge>{selectedAgent.mode}</Badge></p>
+                            <p><strong>Objective:</strong> {selectedAgent.objective}</p>
+                          </div>
+                          <Separator className="my-4" />
+                          <Label htmlFor="newTaskGoal">Submit New Task</Label>
+                          <Textarea id="newTaskGoal" placeholder="e.g., Refactor the Button component to use Tailwind CSS." className="my-2" value={newTaskGoal} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewTaskGoal(e.target.value)} />
+                          <div className="flex gap-2">
+                            <Button className="flex-1" onClick={handleRunAgent} disabled={executeMutation.isPending}>
+                              {executeMutation.isPending ? "Starting..." : <><Play className="mr-2 h-4 w-4" /> Run Agent</>}
+                            </Button>
+                            <Button variant="outline" onClick={handleEditAgent}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit Agent
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader><CardTitle>Jobs</CardTitle></CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-48">
+                            {isLoadingJobs ? <p>Loading jobs...</p> : (
+                              <Table>
+                                <TableHeader><TableRow><TableHead>Job ID</TableHead><TableHead>Goal</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                  {jobs?.map(job => (
+                                    <TableRow key={job.id} onClick={() => setSelectedJobId(job.id)} className={selectedJobId === job.id ? 'bg-accent/50 cursor-pointer' : 'cursor-pointer'}>
+                                      <TableCell className="font-mono text-xs">{job.id.substring(0, 8)}...</TableCell>
+                                      <TableCell>{job.goal.substring(0, 30)}...</TableCell>
+                                      <TableCell><Badge>{job.status}</Badge></TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 </Panel>
+                <PanelResizeHandle className="w-2 bg-gray-200 hover:bg-gray-300" />
+                <Panel defaultSize={50}>
+                  {selectedFile && selectedRepoPath ? (
+                    <FileEditor filePath={selectedFile} localPath={selectedRepoPath} onClose={() => setSelectedFile(null)} />
+                  ) : selectedJobId ? (
+                    <div className="flex flex-col h-full p-4 gap-4">
+                      <Card className="flex-1 flex flex-col">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2"><ScrollText className="h-5 w-5" /> Agent Log & Thoughts</CardTitle>
+                          {currentJobStatus && <CardDescription>Status: <Badge>{currentJobStatus}</Badge></CardDescription>}
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-hidden">
+                          <ScrollArea className="h-full p-2 border rounded-md bg-black font-mono text-sm" ref={scrollAreaRef}>
+                            {(isLoadingInitialLogs && displayedJobLogs.length === 0) ? <p className="text-white">Loading logs...</p> : displayedJobLogs.map((log, index) => (
+                              <div key={log.log_id || index} className="whitespace-pre-wrap text-white">
+                                <span className="text-green-400">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                <span className={`ml-2 font-bold ${
+                                  log.log_type === 'thought' ? 'text-purple-400' :
+                                  log.log_type === 'action' ? 'text-blue-400' :
+                                  log.log_type === 'error' ? 'text-red-500' :
+                                  'text-gray-300'
+                                }`}>
+                                  [{log.log_type.toUpperCase()}]
+                                </span>
+                                <span className="ml-2">{log.content}</span>
+                              </div>
+                            ))}
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                      {currentJobStatus === 'awaiting_human_input' && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-lg">Agent Awaiting Input</CardTitle>
+                            <CardDescription>The agent needs your clarification or approval to proceed.</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-2">
+                            {displayedJobLogs.length > 0 && displayedJobLogs[displayedJobLogs.length - 1].log_type === 'human_input_needed' && (
+                              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{displayedJobLogs[displayedJobLogs.length - 1].content}</p>
+                            )}
+                            <Textarea
+                              placeholder="Type your input or clarification here..."
+                              value={humanInput}
+                              onChange={(e) => setHumanInput(e.target.value)}
+                              rows={3}
+                              disabled={submitHumanInputMutation.isPending}
+                            />
+                            <Button
+                              className="w-full"
+                              onClick={handleHumanInputSubmit}
+                              disabled={submitHumanInputMutation.isPending || !humanInput.trim()}
+                            >
+                              {submitHumanInputMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                              Submit Input & Resume
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      )}
+                      <PanelGroup direction="vertical">
+                        <Panel>
+                          <div className="h-full">
+                            <FileTree onFileSelect={setSelectedFile} selectedFile={selectedFile} selectedRepoPath={selectedRepoPath} setSelectedRepoPath={setSelectedRepoPath} selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch} />
+                            <GitOperationsPanel localPath={selectedRepoPath} currentBranch={selectedBranch} onBranchChange={setSelectedBranch} />
+                          </div>
+                        </Panel>
+                      </PanelGroup>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col h-full p-4 gap-4">
+                      <Card className="flex-1 flex flex-col">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2"><ScrollText className="h-5 w-5" /> Agent Log & Thoughts</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 flex items-center justify-center"><p className="text-muted-foreground">Select a job to view logs.</p></CardContent>
+                    </Card>
+                    <PanelGroup direction="vertical">
+                      <Panel>
+                        <div className="h-full">
+                          <FileTree onFileSelect={setSelectedFile} selectedFile={selectedFile} selectedRepoPath={selectedRepoPath} setSelectedRepoPath={setSelectedRepoPath} selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch} />
+                          <GitOperationsPanel localPath={selectedRepoPath} currentBranch={selectedBranch} onBranchChange={setSelectedBranch} />
+                        </div>
+                      </Panel>
+                    </PanelGroup>
+                  </div>
+                  )}
+                </Panel>
               </PanelGroup>
-            </div>
+            )
           ) : (
-            <div className="flex flex-col h-full p-4 gap-4">
-              <Card className="flex-1 flex flex-col">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><ScrollText className="h-5 w-5" /> Agent Log & Thoughts</CardTitle>
-                </CardHeader>
-                <CardContent className="flex-1 flex items-center justify-center"><p className="text-muted-foreground">Select a job to view logs.</p></CardContent>
-            </Card>
-            <PanelGroup direction="vertical">
-              <Panel>
-                <div className="h-full">
-                  <FileTree onFileSelect={setSelectedFile} selectedFile={selectedFile} selectedRepoPath={selectedRepoPath} setSelectedRepoPath={setSelectedRepoPath} selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch} />
-                  <GitOperationsPanel localPath={selectedRepoPath} currentBranch={selectedBranch} onBranchChange={setSelectedBranch} />
-                </div>
-              </Panel>
-            </PanelGroup>
-          </div>
-        )}
-      </Panel>
-    </PanelGroup>
-    <CreateEditAgentDialog
-      isOpen={isCreateDialogOpen}
-      onClose={() => setIsCreateDialogOpen(false)}
-      agent={null} // No agent for creation
-    />
-    <CreateEditAgentDialog
-      isOpen={isEditDialogOpen}
-      onClose={() => setIsEditDialogOpen(false)}
-      agent={agentToEdit} // Pass the selected agent for editing
-    />
+            <Card className="h-full flex items-center justify-center"><p className="text-muted-foreground">Select an agent to begin.</p></Card>
+          )}
+        </Panel>
+      </PanelGroup>
+      <CreateEditAgentDialog
+        isOpen={isCreateDialogOpen}
+        onClose={() => setIsCreateDialogOpen(false)}
+        agent={null}
+      />
+      <CreateEditAgentDialog
+        isOpen={isEditDialogOpen}
+        onClose={() => setIsEditDialogOpen(false)}
+        agent={agentToEdit}
+      />
     </>
   );
 };

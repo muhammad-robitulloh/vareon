@@ -8,17 +8,18 @@ class ChatService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def handle_message(self, user: DBUser, prompt: str, session_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def handle_message(self, user: DBUser, prompt: str, session_data: Dict[str, Any], agent_id: str | None = None) -> Dict[str, Any]:
         """
         Handles an incoming chat message, processes it with tool-calling capabilities, and returns a response.
         """
-        print(f"ChatService handling message for user {user.id}: '{prompt}'")
+        print(f"ChatService handling message for user {user.id}: '{prompt}' with agent_id: {agent_id}")
 
         response_data = await llm_interaction.process_chat_request(
             db=self.db, 
             user=user, 
             prompt=prompt,
-            session_data=session_data
+            session_data=session_data,
+            agent_id=agent_id
         )
         
         return response_data

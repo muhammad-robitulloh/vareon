@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Badge, ScrollArea, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui';
 import { Send, Paperclip, ChevronDown, Sparkles, Activity, PanelRightOpen, WifiOff } from 'lucide-react';
 import ContextMemoryPanel from './context-memory-panel';
+import { ArcanaAgent } from '@/types/system';
 
 // Define message structure
 interface Message {
@@ -12,11 +13,15 @@ interface Message {
     createdAt: Date;
 }
 
-export default function ChatInterfaceTab() {
+interface AgentChatInterfaceTabProps {
+  agent: ArcanaAgent | null;
+}
+
+export default function AgentChatInterfaceTab({ agent }: AgentChatInterfaceTabProps) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
-  const [isConnecting, setIsConnecting] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const ws = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,16 +35,27 @@ export default function ChatInterfaceTab() {
   }, [messages]);
 
   useEffect(() => {
+    // Clear messages when agent changes
+    setMessages([]);
+
+    if (!agent) {
+      if (ws.current) {
+        ws.current.close();
+      }
+      return;
+    }
+
     const sessionId = crypto.randomUUID();
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const accessToken = localStorage.getItem("access_token");
     const wsUrl = `${protocol}//${window.location.host}/ws-api/ws/arcana/${sessionId}?token=${accessToken}`;
 
+    setIsConnecting(true);
     const socket = new WebSocket(wsUrl);
     ws.current = socket;
 
     socket.onopen = () => {
-      console.log("WebSocket connected");
+      console.log(`WebSocket connected for agent ${agent.name}`);
       setIsConnecting(false);
       setIsConnected(true);
     };
@@ -61,15 +77,23 @@ export default function ChatInterfaceTab() {
       if (message.type === 'chat_response') {
         setMessages(prevMessages => {
             const lastMessage = prevMessages[prevMessages.length - 1];
-            // If last message is from assistant, update it (for streaming)
-            if (lastMessage && lastMessage.role === 'assistant') {
+            // If last message is from assistant and has empty content, update it (streaming start)
+            if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === '') {
                 return prevMessages.map((msg, index) => 
                     index === prevMessages.length - 1 
-                    ? { ...msg, content: msg.content + message.payload.response } 
+                    ? { ...msg, content: message.payload.response } 
                     : msg
                 );
             }
-            // Otherwise, add a new assistant message
+            // If last message is from assistant, append to it (streaming continuation)
+            if (lastMessage && lastMessage.role === 'assistant') {
+                return prevMessages.map((msg, index) =>
+                    index === prevMessages.length - 1
+                    ? { ...msg, content: msg.content + message.payload.response }
+                    : msg
+                );
+            }
+            // Otherwise, add a new assistant message (should not happen with current logic but good as a fallback)
             return [...prevMessages, {
                 id: message.payload.message_id || crypto.randomUUID(),
                 role: 'assistant',
@@ -80,16 +104,16 @@ export default function ChatInterfaceTab() {
       }
     };
 
-    // Cleanup on component unmount
+    // Cleanup on component unmount or when agent changes
     return () => {
       if (ws.current) {
         ws.current.close();
       }
     };
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, [agent]);
 
   const handleSend = () => {
-    if (!input.trim() || !ws.current || ws.current.readyState !== WebSocket.OPEN) {
+    if (!input.trim() || !ws.current || ws.current.readyState !== WebSocket.OPEN || !agent) {
       return;
     }
 
@@ -103,7 +127,10 @@ export default function ChatInterfaceTab() {
 
     const event = {
       type: 'chat_message',
-      payload: { prompt: input },
+      payload: { 
+        prompt: input,
+        agent_id: agent.id // Include agent ID
+      },
     };
     ws.current.send(JSON.stringify(event));
 
@@ -124,8 +151,8 @@ export default function ChatInterfaceTab() {
         <div className="border-b px-6 py-3 bg-card/50">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-medium">Chat with ARCANA</h3>
-              <p className="text-sm text-muted-foreground">Cognitive AI Assistant</p>
+              <h3 className="font-medium">Chat with {agent?.name || 'ARCANA'}</h3>
+              <p className="text-sm text-muted-foreground">{agent?.objective || 'Cognitive AI Assistant'}</p>
             </div>
             <div className="flex items-center gap-2">
                 {isConnecting ? <Badge variant="outline"><Activity className="h-3 w-3 mr-1 animate-spin" />Connecting...</Badge> 
@@ -165,7 +192,7 @@ export default function ChatInterfaceTab() {
             <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" data-testid="button-attach-file"><Paperclip className="h-4 w-4" /></Button>
               <Input
-                placeholder="Type your message..."
+                placeholder={`Chat with ${agent?.name || 'your agent'}...`}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}

@@ -87,9 +87,10 @@ class EventHandler:
             chat_service = session_data["chat"]
             user = session_data["user"]
             prompt = payload.get("prompt", "")
+            agent_id = payload.get("agent_id") # Extract agent_id
             
-            # Pass the entire session_data dictionary
-            response_data = await chat_service.handle_message(user, prompt, session_data)
+            # Pass the entire session_data dictionary and agent_id
+            response_data = await chat_service.handle_message(user, prompt, session_data, agent_id)
             
             return {
                 "type": "chat_response",

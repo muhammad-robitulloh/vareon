@@ -38,4 +38,4 @@ def assign_admin_role_to_user(username: str):
     db.close()
 
 if __name__ == "__main__":
-    assign_admin_role_to_user("mrbtlhh")
+    assign_admin_role_to_user("muhammad-robitulloh")

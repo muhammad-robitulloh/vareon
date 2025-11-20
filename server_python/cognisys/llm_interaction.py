@@ -5,7 +5,7 @@ import os
 import httpx
 from fastapi import HTTPException, BackgroundTasks
 
-from server_python.database import LLMProvider, LLMModel, RoutingRule, User # Changed from ..database
+from server_python.database import LLMProvider, LLMModel, RoutingRule, User, ArcanaAgent # Changed from ..database
 from .crud import decrypt_api_key # Import the decrypt function
 from .schemas import IntentDetectionResponse # Import the new schema
 from server_python.llm_service import get_openrouter_completion # Import the generic LLM completion service
@@ -290,7 +290,8 @@ async def process_chat_request(
     user: User, 
     prompt: str, 
     session_data: Dict[str, Any],
-    background_tasks: BackgroundTasks # Added background_tasks
+    background_tasks: BackgroundTasks, # Added background_tasks
+    agent_id: str | None = None
 ) -> Dict[str, Any]:
     
     terminal_service = session_data.get("terminal")
@@ -308,8 +309,19 @@ async def process_chat_request(
     intent = intent_response.intent
     print(f"DEBUG: Detected intent: {intent} (Confidence: {intent_response.confidence:.2f})")
 
-    # Initialize messages list with the user's prompt
-    messages = [{"role": "user", "content": prompt}]
+    # Initialize messages list
+    messages = []
+    
+    # If an agent_id is provided, fetch the agent and create a system prompt
+    if agent_id:
+        agent = db.query(ArcanaAgent).filter(ArcanaAgent.id == agent_id, ArcanaAgent.owner_id == str(user.id)).first()
+        if agent:
+            system_prompt = f"You are an AI assistant with the persona of a '{agent.persona}'. Your primary objective is: {agent.objective}"
+            messages.append({"role": "system", "content": system_prompt})
+            print(f"DEBUG: Using system prompt for agent {agent.id}: {system_prompt}")
+
+    # Add the user's prompt
+    messages.append({"role": "user", "content": prompt})
 
     # 2. Model Selection (based on intent or routing rules)
     nodes.append({"id": "intent", "data": {"label": f"Intent: {intent} (Conf: {intent_response.confidence:.2f})"}, "position": {"x": 0, "y": y_pos}})
