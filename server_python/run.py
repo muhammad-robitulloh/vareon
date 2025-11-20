@@ -87,35 +87,37 @@ def main():
 
     if args.dev:
         # --- Build Frontend (if --with-frontend is specified) ---
-        if args.with_frontend:
-            logger.info("Building Node.js frontend...")
-            if not os.path.isdir(frontend_dir):
-                logger.error(f"Frontend source directory not found: {frontend_dir}. Skipping frontend build.")
-            else:
-                try:
-                    # We use subprocess.run here because these are short-lived build commands.
-                    logger.info("Running 'npm install' for frontend...")
-                    npm_install_result = subprocess.run(['npm', 'install'], cwd=frontend_dir, check=True, capture_output=True, text=True)
-                    logger.info(f"npm install completed. Stdout lines: {len(npm_install_result.stdout.splitlines())}")
-                    if npm_install_result.stderr:
-                        logger.warning(f"npm install had warnings/errors.")
+        # Frontend build is now handled by the Railway build process (see railpack.json).
+        # This section is commented out to prevent redundant builds during runtime.
+        # if args.with_frontend:
+        #     logger.info("Building Node.js frontend...")
+        #     if not os.path.isdir(frontend_dir):
+        #         logger.error(f"Frontend source directory not found: {frontend_dir}. Skipping frontend build.")
+        #     else:
+        #         try:
+        #             logger.info("Running 'npm install' for frontend...")
+        #             npm_install_result = subprocess.run(['npm', 'install'], cwd=frontend_dir, check=True, capture_output=True, text=True)
+        #             logger.info(f"npm install completed. Stdout lines: {len(npm_install_result.stdout.splitlines())}")
+        #             if npm_install_result.stderr:
+        #                 logger.warning(f"npm install had warnings/errors.")
 
-                    logger.info("Running 'npm run build' for frontend...")
-                    npm_build_result = subprocess.run(['npm', 'run', 'build'], cwd=frontend_dir, check=True, capture_output=True, text=True)
-                    logger.info(f"npm run build completed. Stdout lines: {len(npm_build_result.stdout.splitlines())}")
-                    if npm_build_result.stderr:
-                        logger.warning(f"npm run build had warnings/errors.")
-                    logger.info("Frontend build successful.")
+        #             logger.info("Running 'npm run build' for frontend...")
+        #             npm_build_result = subprocess.run(['npm', 'run', 'build'], cwd=frontend_dir, check=True, capture_output=True, text=True)
+        #             logger.info(f"npm run build completed. Stdout lines: {len(npm_build_result.stdout.splitlines())}")
+        #             if npm_build_result.stderr:
+        #                 logger.warning(f"npm run build had warnings/errors.")
+        #             logger.info("Frontend build successful.")
 
-                except subprocess.CalledProcessError as e:
-                    logger.error(f"Frontend build failed: {e.cmd}\nStderr:\n{e.stderr}")
-                    sys.exit(1)
-                except FileNotFoundError:
-                    logger.error("npm command not found. Please ensure Node.js and npm are installed.")
-                    sys.exit(1)
-                except Exception as e:
-                    logger.error(f"Failed to build frontend: {e}", exc_info=True)
-                    sys.exit(1)
+        #         except subprocess.CalledProcessError as e:
+        #             logger.error(f"Frontend build failed: {e.cmd}\nStderr:\n{e.stderr}")
+        #             sys.exit(1)
+        #         except FileNotFoundError:
+        #             logger.error("npm command not found. Please ensure Node.js and npm are installed.")
+        #             sys.exit(1)
+        #         except Exception as e:
+        #             logger.error(f"Failed to build frontend: {e}", exc_info=True)
+        #             sys.exit(1)
+
 
         # --- Start Python Backend ---
         logger.info(f"Starting Python backend development server on http://{args.host}:{args.port}")
