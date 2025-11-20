@@ -118,7 +118,7 @@ class GitService:
                 tracking = current_branch.tracking_branch()
                 if tracking:
                     ahead_by = len(list(repo.iter_commits(f'{current_branch.name}@{{upstream}}..{current_branch.name}')))
-                    behind_by = len(list(repo.iter_commits(f'{current_branch.name}..{current_branch.name}@{'{'}upstream{'}'}')))
+                    behind_by = len(list(repo.iter_commits(f'{current_branch.name}..{current_branch.name}@{{upstream}}')))
         except Exception:
             pass # No tracking branch or other error
         
