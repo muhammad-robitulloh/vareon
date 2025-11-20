@@ -13,7 +13,7 @@
     "node": "22"
   },
   "commands": {
-    "install": "pip install -r server_python/requirements.txt && (npm ci --prefix client || npm install --prefix client)",
+    "install": "pip install -r server_python/requirements.txt "
     "start": "python main.py"
   },
   "entrypoint": "python main.py"
