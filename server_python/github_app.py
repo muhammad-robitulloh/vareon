@@ -15,7 +15,7 @@ router = APIRouter()
 
 # --- GitHub App Configuration ---
 GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
-GITHUB_APP_PRIVATE_KEY = os.getenv("GITHUB_APP_PRIVATE_KEY").replace('\\n', '\n') if os.getenv("GITHUB_APP_PRIVATE_KEY") else None
+GITHUB_APP_PRIVATE_KEY = os.getenv("GITHUB_APP_PRIVATE_KEY")
 GITHUB_APP_INSTALLATION_URL = "https://github.com/apps/connect-to-arcana"
 
 if not GITHUB_APP_ID or not GITHUB_APP_PRIVATE_KEY:
@@ -27,7 +27,7 @@ def generate_jwt_token():
         raise HTTPException(status_code=500, detail="GitHub App not configured.")
 
     payload = {
-        "iat": int(time.time()),
+        "iat": int(time.time()) - 60,  # 1 minute in the past to allow for clock skew
         "exp": int(time.time()) + (10 * 60),  # 10 minutes
         "iss": GITHUB_APP_ID,
     }

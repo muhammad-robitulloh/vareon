@@ -435,8 +435,8 @@ def get_user_from_db(db, username: str):
 def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email).first()
 
-def create_user_in_db(db: Session, username: str, hashed_password: str, email: str, verification_token: str, verification_token_expires_at: datetime):
-    db_user = User(id=str(uuid.uuid4()), username=username, hashed_password=hashed_password, email=email, verification_token=verification_token, verification_token_expires_at=verification_token_expires_at)
+def create_user_in_db(db: Session, username: str, hashed_password: str, email: str, verification_token: Optional[str] = None, verification_token_expires_at: Optional[datetime] = None, is_verified: bool = False):
+    db_user = User(id=str(uuid.uuid4()), username=username, hashed_password=hashed_password, email=email, verification_token=verification_token, verification_token_expires_at=verification_token_expires_at, is_verified=is_verified)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

@@ -65,11 +65,11 @@ async def _handle_oauth_user(db: Session, email: str, username: str, provider: s
                 default_author_name=username,
                 default_author_email=email
             )
-            git_crud.create_user_git_config(db, str(user.id), new_config_data)
+            db_config = git_crud.create_user_git_config(db, str(user.id), new_config_data)
         print(f"AUDIT: GitHub PAT stored for user {user.username}")
 
         # Check if GitHub App is installed
-        if not db_config or not db_config.github_app_installation_id:
+        if not db_config.github_app_installation_id:
             needs_github_app_install = True
     
     # Always redirect to /auth, but pass the needs_github_app_install flag

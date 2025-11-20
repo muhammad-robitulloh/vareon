@@ -3,3 +3,5 @@ node_modules
 .DS_Store
 vite.config.ts.*
 *.tar.gz
+.env
+server_python/.env
