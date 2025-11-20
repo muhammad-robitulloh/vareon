@@ -1196,13 +1196,41 @@ frontend_build_dir = os.path.join(project_root, 'dist', 'public') # Corrected pa
 # Mount the static files directory (e.g., assets, favicon, etc.)
 # We are mounting the entire build directory, as assets seem to be directly under it.
 app.mount("/assets", StaticFiles(directory=os.path.join(frontend_build_dir, "assets")), name="assets")
-app.mount("/favicon.ico", StaticFiles(directory=frontend_build_dir), name="favicon") # For favicon directly in root
-app.mount("/logo192.png", StaticFiles(directory=frontend_build_dir), name="logo192") # For logo directly in root
-app.mount("/logo512.png", StaticFiles(directory=frontend_build_dir), name="logo512") # For logo directly in root
-app.mount("/manifest.json", StaticFiles(directory=frontend_build_dir), name="manifest") # For manifest directly in root
+
+@app.get("/manifest.json", include_in_schema=False)
+async def get_manifest():
+    manifest_path = os.path.join(frontend_build_dir, 'manifest.json')
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path)
+    else:
+        return Response(status_code=404)
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def get_favicon():
+    favicon_path = os.path.join(frontend_build_dir, 'favicon.ico')
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    else:
+        return Response(status_code=404)
+
+@app.get("/logo192.png", include_in_schema=False)
+async def get_logo192():
+    logo_path = os.path.join(frontend_build_dir, 'logo192.png')
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path)
+    else:
+        return Response(status_code=404)
+
+@app.get("/logo512.png", include_in_schema=False)
+async def get_logo512():
+    logo_path = os.path.join(frontend_build_dir, 'logo512.png')
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path)
+    else:
+        return Response(status_code=404)
 
 
-@app.get("/{rest_of_path:path}")
+@app.api_route("/{rest_of_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
 async def serve_react_app(request: Request, rest_of_path: str):
     """
     Serves the React application.

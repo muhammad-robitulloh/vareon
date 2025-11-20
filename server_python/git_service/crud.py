@@ -29,6 +29,7 @@ def create_user_git_config(db: Session, user_id: str, config: UserGitConfigCreat
         id=str(uuid.uuid4()),
         user_id=user_id,
         github_pat_encrypted=encrypted_pat,
+        github_app_installation_id=config.github_app_installation_id,
         default_author_name=config.default_author_name,
         default_author_email=config.default_author_email,
         default_repo_url=config.default_repo_url,
@@ -43,18 +44,14 @@ def create_user_git_config(db: Session, user_id: str, config: UserGitConfigCreat
 def update_user_git_config(db: Session, user_id: str, config: UserGitConfigUpdate) -> Optional[DBUserGitConfig]:
     db_config = get_user_git_config(db, user_id)
     if db_config:
-        if config.github_pat is not None:
-            db_config.github_pat_encrypted = encrypt_api_key(config.github_pat) if config.github_pat else None
-        if config.default_author_name is not None:
-            db_config.default_author_name = config.default_author_name
-        if config.default_author_email is not None:
-            db_config.default_author_email = config.default_author_email
-        if config.default_repo_url is not None:
-            db_config.default_repo_url = config.default_repo_url
-        if config.default_local_path is not None:
-            db_config.default_local_path = config.default_local_path
-        if config.default_branch is not None:
-            db_config.default_branch = config.default_branch
+        update_data = config.dict(exclude_unset=True)
+        if 'github_pat' in update_data:
+            db_config.github_pat_encrypted = encrypt_api_key(update_data['github_pat']) if update_data['github_pat'] else None
+        
+        for key, value in update_data.items():
+            if key != 'github_pat': # We've already handled PAT
+                setattr(db_config, key, value)
+
         db_config.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(db_config)

@@ -8,8 +8,9 @@ from typing import List, Optional
 from server_python.database import get_db, User as DBUser
 from server_python.auth import get_current_user
 from server_python.encryption_utils import encrypt_api_key, decrypt_api_key
-from . import schemas, service, crud # Import crud
-from server_python.schemas import MessageResponse # Import MessageResponse
+from . import schemas, service, crud
+from .github_client import GitHubClient
+from server_python.schemas import MessageResponse
 
 router = APIRouter()
 
@@ -111,6 +112,25 @@ async def get_branches(local_path: str, git_service: service.GitService = Depend
 async def read_file_content(local_path: str, file_path: str, git_service: service.GitService = Depends(get_git_service)):
     return await git_service.read_file_content(local_path, file_path)
 
-@router.post("/file_content", response_model=str)
+@router.get("/file_content", response_model=str)
 async def write_file_content(local_path: str, file_path: str, content: schemas.GitFileContent, git_service: service.GitService = Depends(get_git_service)):
     return await git_service.write_file_content(local_path, file_path, content.content)
+
+@router.get("/github/repositories")
+async def get_github_repositories(current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_config = crud.get_user_git_config(db, str(current_user.id))
+    if not db_config or not db_config.github_app_installation_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GitHub App not installed or configured.")
+    
+    async with GitHubClient(db_config.github_app_installation_id) as client:
+        return await client.get_repositories()
+
+@router.get("/github/repositories/{owner}/{repo}/branches")
+async def get_github_repository_branches(owner: str, repo: str, current_user: DBUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_config = crud.get_user_git_config(db, str(current_user.id))
+    if not db_config or not db_config.github_app_installation_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GitHub App not installed or configured.")
+    
+    repo_full_name = f"{owner}/{repo}"
+    async with GitHubClient(db_config.github_app_installation_id) as client:
+        return await client.get_branches(repo_full_name)

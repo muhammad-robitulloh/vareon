@@ -50,10 +50,22 @@ class TerminalService:
 
     async def close_session(self):
         if self.shell_process and self.shell_process.returncode is None:
-            self.shell_process.terminate()
-            await self.shell_process.wait()
+            try:
+                self.shell_process.terminate()
+                await self.shell_process.wait()
+            except ProcessLookupError:
+                pass # Process already terminated
         
-        if self.master_fd:
-            os.close(self.master_fd)
-        if self.slave_fd:
-            os.close(self.slave_fd)
+        if self.master_fd is not None:
+            try:
+                os.close(self.master_fd)
+            except OSError:
+                pass # Already closed
+            self.master_fd = None
+
+        if self.slave_fd is not None:
+            try:
+                os.close(self.slave_fd)
+            except OSError:
+                pass # Already closed
+            self.slave_fd = None

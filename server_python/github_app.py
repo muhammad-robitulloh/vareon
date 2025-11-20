@@ -15,7 +15,7 @@ router = APIRouter()
 
 # --- GitHub App Configuration ---
 GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
-GITHUB_APP_PRIVATE_KEY = os.getenv("GITHUB_APP_PRIVATE_KEY")
+GITHUB_APP_PRIVATE_KEY = os.getenv("GITHUB_APP_PRIVATE_KEY").replace('\\n', '\n') if os.getenv("GITHUB_APP_PRIVATE_KEY") else None
 GITHUB_APP_INSTALLATION_URL = "https://github.com/apps/connect-to-arcana"
 
 if not GITHUB_APP_ID or not GITHUB_APP_PRIVATE_KEY:

@@ -148,7 +148,11 @@ const GithubSettingsTab: React.FC = () => {
   };
 
   const handleConnectGitHub = () => {
-    window.location.href = '/api/git/github/app/install';
+    if (!token) {
+      toast({ title: 'Authentication Error', description: 'Could not find authentication token.', variant: 'destructive' });
+      return;
+    }
+    window.location.href = `/api/git/github/app/install?token=${token}`;
   };
 
   const handleDisconnectGitHub = () => {

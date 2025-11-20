@@ -106,6 +106,54 @@ export default function Dashboard() {
 
   const queryClient = useQueryClient();
 
+  // Handle GitHub App installation callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const installationId = params.get('installation_id');
+    const setupAction = params.get('setup_action');
+    const state = params.get('state');
+
+    // We only care about the callback after a new installation or update
+    if (installationId && state && (setupAction === 'install' || setupAction === 'update')) {
+      const handleGitHubCallback = async () => {
+        try {
+          // Forward the callback to our backend
+          const response = await fetch(`/api/git/github/app/callback?installation_id=${installationId}&state=${state}`);
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'GitHub App installation failed during callback.');
+          }
+
+          // The backend handles the logic and will eventually redirect.
+          // For a better UX, we'll show a toast and navigate to the profile page
+          // where the user can see the result of the connection.
+          toast({
+            title: 'GitHub Connection Successful',
+            description: 'Your GitHub account has been linked. Redirecting to profile...',
+          });
+
+          // Invalidate any queries that depend on git config
+          await queryClient.invalidateQueries({ queryKey: ['userGitConfig'] });
+
+          // Redirect to the profile page to show the new connection status
+          setLocation('/dashboard/profile', { replace: true });
+
+        } catch (error) {
+          toast({
+            title: 'Error Connecting GitHub',
+            description: error instanceof Error ? error.message : String(error),
+            variant: 'destructive',
+          });
+          // Still redirect to clean up the URL
+          setLocation('/dashboard/profile', { replace: true });
+        }
+      };
+
+      handleGitHubCallback();
+    }
+  }, [location, setLocation, toast, queryClient]);
+
 
 
   const { data: systemStatus, isLoading, error } = useQuery<SystemStatus>({

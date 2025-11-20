@@ -117,8 +117,9 @@ const ArcanaAgentTab: React.FC = () => {
       }
 
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsHost = window.location.host; // This will include the port if it's not default (80/443)
-      const ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/arcana/${selectedJobId}?token=${token}`);
+      const wsHost = window.location.host;
+      const wsUrl = `${wsProtocol}//${wsHost}/ws-api/ws/arcana/${selectedJobId}?token=${token}`;
+      const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         console.log(`WebSocket connected for job ${selectedJobId}`);
