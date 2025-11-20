@@ -1,9 +1,19 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-import { motion } from "framer-motion" // Import motion
+import { motion, HTMLMotionProps } from "framer-motion"
+import { ForwardedRef } from "react" // Correctly import ForwardedRef from react
 
 import { cn } from "@/lib/utils"
+
+// Helper to merge types and overwrite conflicting keys
+type Merge<T, U> = Omit<T, keyof U> & U;
+
+// Define MotionButtonProps that merges React's button attributes and framer-motion's props
+type MotionButtonProps = Merge<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  HTMLMotionProps<"button">
+>;
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -20,9 +30,6 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
-      // Heights are set as "min" heights, because sometimes Ai will place large amount of content
-      // inside buttons. With a min-height they will look appropriate with small amounts of content,
-      // but will expand to fit large amounts of content.
       size: {
         default: "min-h-9 px-4 py-2",
         sm: "min-h-8 rounded-md px-3 text-xs",
@@ -38,26 +45,26 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends MotionButtonProps, // Use the merged props
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? motion(Slot) : motion.button // Use motion.button and motion(Slot)
+    const Comp = asChild ? motion(Slot) : motion.button;
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        whileHover={{ scale: 1.02 }} // Subtle hover effect
-        whileTap={{ scale: 0.98 }} // Subtle tap effect
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         {...props}
       />
-    )
-  },
-)
-Button.displayName = "Button"
+    );
+  }
+);
+Button.displayName = "Button";
 
 export { Button, buttonVariants }
 

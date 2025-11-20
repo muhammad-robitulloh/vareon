@@ -1,20 +1,30 @@
 import * as React from "react"
-import { motion } from "framer-motion" // Import motion
+import { motion, HTMLMotionProps } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
+// Helper to merge types and overwrite conflicting keys
+type Merge<T, U> = Omit<T, keyof U> & U;
+
+// Define MotionDivProps that merges React's div attributes and framer-motion's props
+type MotionDivProps = Merge<
+  React.HTMLAttributes<HTMLDivElement>,
+  HTMLMotionProps<"div">
+>;
+
+
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
+  MotionDivProps
 >(({ className, ...props }, ref) => (
-  <motion.div // Wrap with motion.div
+  <motion.div
     ref={ref}
     className={cn(
-      "shadcn-card rounded-xl card-glow bg-card text-card-foreground", // Use card-glow
+      "shadcn-card rounded-xl card-glow bg-card text-card-foreground",
       className
     )}
-    whileHover={{ scale: 1.01 }} // Subtle scale on hover
-    transition={{ type: "spring", stiffness: 300, damping: 20 }} // Smooth transition
+    whileHover={{ scale: 1.01 }}
+    transition={{ type: "spring", stiffness: 300, damping: 20 }}
     {...props}
   />
 ));
