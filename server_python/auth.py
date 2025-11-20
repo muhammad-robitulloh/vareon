@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status, Request, WebSocket
-from .schemas import TokenData
+from server_python.schemas import TokenData
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import os
@@ -165,8 +165,8 @@ def decode_access_token(token: str) -> dict:
     except JWTError as e:
         raise JWTError(f"Could not validate credentials: {e}")
 
-from . import database # Import the database module
-from .database import get_user_from_db, User # Keep other necessary imports
+from server_python import database # Import the database module
+from server_python.database import get_user_from_db, User # Keep other necessary imports
 from sqlalchemy.orm import joinedload # Add this import
 
 # ... (rest of the file) ...

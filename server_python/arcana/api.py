@@ -170,7 +170,7 @@ async def file_operations_endpoint(
     """
     Performs various file operations within the user's sandboxed directory.
     """
-    logger.info(f"User {current_user.id} requested file operation: {request.operation} on path '{request.path}'.")
+    logger.info(f"User {current_user.id} requested file operation: {request.action} on path '{request.path}'.")
     return await file_management_service.perform_file_operation(current_user, request)
 
 @router.post("/agents/{agent_id}/execute", response_model=schemas.ArcanaAgentJobResponse)
@@ -205,14 +205,12 @@ async def execute_arcana_agent_task(
         db,
         current_user,
         request,
-        job.id,
-        initial_messages=initial_messages,
-        original_request_obj=request
+        job.id
     )
     logger.info(f"Added job {job.id} to background tasks for execution.")
 
-    return job
 
+    return job.dict()
 @router.get("/agents/{agent_id}/jobs/", response_model=List[schemas.ArcanaAgentJobResponse])
 def get_agent_jobs(
     agent_id: str,
@@ -241,7 +239,7 @@ def get_agent_job(
     if not job:
         logger.warning(f"User {current_user.id} failed to find job {job_id}.")
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return job.dict()
 
 @router.get("/jobs/{job_id}/logs", response_model=List[schemas.ArcanaAgentJobLogResponse])
 def get_agent_job_logs(
@@ -257,7 +255,7 @@ def get_agent_job_logs(
     if not job:
         logger.warning(f"User {current_user.id} failed to find job {job_id} while fetching logs.")
         raise HTTPException(status_code=404, detail="Job not found")
-    return job.logs
+    return crud.get_recent_agent_job_logs(db, job_id=job_id)
 
 @router.post("/jobs/{job_id}/submit_human_input", response_model=schemas.ArcanaAgentJobResponse)
 async def submit_human_input(
@@ -392,15 +390,15 @@ async def execute_cli_command(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Missing arguments: 'operation' and 'path' are required for 'file-operation'. Usage: arcana file-operation <operation> <path> [content]"
                 )
-            operation = request.args[0]
+            action = request.args[0]
             path = request.args[1]
             content = request.args[2] if len(request.args) > 2 else None
             
-            file_op_request = schemas.FileOperationRequest(operation=operation, path=path, content=content)
+            file_op_request = schemas.FileOperationRequest(action=action, path=path, content=content)
             file_op_response = await file_management_service.perform_file_operation(current_user, file_op_request)
             response_output = file_op_response.message
-            response_message = f"File operation '{operation}' on '{path}' completed."
-            logger.info(f"User {current_user.id} successfully executed 'file-operation' ('{operation}' on '{path}').")
+            response_message = f"File operation '{action}' on '{path}' completed."
+            logger.info(f"User {current_user.id} successfully executed 'file-operation' ('{action}' on '{path}').")
         elif request.command == "agent-execute":
             if not request.args or len(request.args) < 2:
                 logger.warning(f"User {current_user.id} failed 'agent-execute': Missing agent ID or task prompt.")
@@ -428,10 +426,8 @@ async def execute_cli_command(
                 agent_orchestration_service.execute_agent_task,
                 db,
                 current_user,
-                agent_execute_request,
-                job.id,
-                initial_messages=[{"role": "user", "content": task_prompt}],
-                original_request_obj=agent_execute_request
+                request,
+                job.id
             )
             response_output = f"Job ID: {job.id}"
             response_message = "Agent task initiated. Use 'arcana job-status <job_id>' to check progress."
@@ -608,4 +604,3 @@ def delete_cli_config(
     if db_config is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CLI configuration not found.")
     return {"ok": True}
-

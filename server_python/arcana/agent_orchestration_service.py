@@ -165,8 +165,10 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
     await crud.add_agent_job_log(db, job_id, "info", f"Starting job {job_id} for agent {request.agent_id}")
     
     try:
+        print(f"DEBUG: execute_agent_task - Inside try block for job {job_id}") # ADDED DEBUG
         db_agent = db.query(ArcanaAgent).filter(ArcanaAgent.id == str(request.agent_id), ArcanaAgent.owner_id == str(user.id)).first()
         if not db_agent:
+            print(f"DEBUG: execute_agent_task - Agent not found for job {job_id}") # ADDED DEBUG
             raise HTTPException(status_code=404, detail="Arcana Agent not found.")
 
         # Extract target_repo_path and target_branch from agent configuration or request
@@ -177,6 +179,7 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
         if not target_repo_path:
             await crud.add_agent_job_log(db, job_id, "error", "No target repository path specified for the agent.")
             crud.update_agent_job_status(db, job_id, "failed", final_output="No target repository path specified.")
+            print(f"DEBUG: execute_agent_task - No target repo path for job {job_id}. Status set to failed.") # ADDED DEBUG
             return
 
         # Initialize services that tools might need
@@ -188,6 +191,7 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
         await crud.add_agent_job_log(db, job_id, "info", f"Operating on repository: {target_repo_path}, branch: {target_branch or 'default'}")
         final_output = ""
         if db_agent.mode == "chat":
+            print(f"DEBUG: execute_agent_task - Agent in chat mode for job {job_id}") # ADDED DEBUG
             # This mode is typically handled by the main chat interface,
             # but if an agent is set to 'chat' mode, it might just respond directly.
             # For now, we'll treat it as a simple LLM call without tools.
@@ -204,10 +208,12 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                     agent_llm_model = db.query(LLMModel).filter(LLMModel.id == user_preferences.default_model_id, LLMModel.is_active == True).first()
 
             if not agent_llm_model:
+                print(f"DEBUG: execute_agent_task - No LLM model found for chat mode job {job_id}") # ADDED DEBUG
                 raise HTTPException(status_code=500, detail="No active LLM model configured for agent or user default.")
             
             llm_provider = db.query(LLMProvider).filter(LLMProvider.id == agent_llm_model.provider_id).first()
             if not llm_provider:
+                print(f"DEBUG: execute_agent_task - No LLM provider found for chat mode job {job_id}") # ADDED DEBUG
                 raise HTTPException(status_code=500, detail=f"LLM Provider not found for model {agent_llm_model.model_name}")
             api_key = decrypt_api_key(llm_provider.api_key_encrypted)
             messages = [{"role": "system", "content": f"You are {db_agent.name}, a {db_agent.persona} agent. Your objective is: {db_agent.objective or 'assist the user'}. Respond to the user's prompt."}]
@@ -221,6 +227,7 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
             final_output = llm_response.get("message", {}).get("content", "No response from LLM.")
             await crud.add_agent_job_log(db, job_id, "thought", f"Chat mode response: {final_output}")
         elif db_agent.mode == "tool_user" or db_agent.mode == "autonomous":
+            print(f"DEBUG: execute_agent_task - Agent in tool_user/autonomous mode for job {job_id}") # ADDED DEBUG
             # Combine AGENT_TOOLS_SCHEMA with Git tools from cognisys.tools
             from server_python.cognisys.tools import tools_schema as cognisys_tools_schema
             all_tools_schema = AGENT_TOOLS_SCHEMA + cognisys_tools_schema
@@ -244,10 +251,12 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                     agent_llm_model = db.query(LLMModel).filter(LLMModel.id == user_preferences.default_model_id, LLMModel.is_active == True).first()
 
             if not agent_llm_model:
+                print(f"DEBUG: execute_agent_task - No LLM model found for tool_user/autonomous mode job {job_id}") # ADDED DEBUG
                 raise HTTPException(status_code=500, detail="No active LLM model configured for agent or user default.")
             
             llm_provider = db.query(LLMProvider).filter(LLMProvider.id == agent_llm_model.provider_id).first()
             if not llm_provider:
+                print(f"DEBUG: execute_agent_task - No LLM provider found for tool_user/autonomous mode job {job_id}") # ADDED DEBUG
                 raise HTTPException(status_code=500, detail=f"LLM Provider not found for model {agent_llm_model.model_name}")
             api_key = decrypt_api_key(llm_provider.api_key_encrypted)
 
@@ -318,8 +327,10 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                                 result_content = f"Error: Tool '{function_name}' not implemented in agent orchestration."
                         except Exception as e:
                             result_content = f"Error executing tool '{function_name}': {e}"
+                            print(f"DEBUG: execute_agent_task - EXCEPTION executing tool '{function_name}' for job {job_id}: {e}") # ADDED DEBUG
                     else:
                         result_content = f"Error: Tool '{function_name}' not found in registry."
+                        print(f"DEBUG: execute_agent_task - Tool '{function_name}' not found in registry for job {job_id}") # ADDED DEBUG
                     await crud.add_agent_job_log(db, job_id, "output", result_content)
                     tool_results.append({
                         "tool_call_id": tool_call['id'], "role": "tool",
@@ -328,8 +339,14 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                 messages.extend(tool_results)
             
             # If loop finishes without breaking due to human input, update status
-            if crud.get_agent_job(db, job_id, str(user.id)).status != "awaiting_human_input":
-                crud.update_agent_job_status(db, job_id, "completed", final_output=final_output)
+
+        # After the agent task completes (either chat mode or tool_user/autonomous mode),
+        # mark the job as completed if it's not already awaiting human input or failed.
+        if crud.get_agent_job(db, job_id, str(user.id)).status not in ["awaiting_human_input", "failed"]:
+            print(f"DEBUG: execute_agent_task - Setting job {job_id} status to completed.")
+            crud.update_agent_job_status(db, job_id, "completed", final_output=final_output)
+
     except Exception as e:
+        print(f"DEBUG: execute_agent_task - EXCEPTION CAUGHT for job {job_id}: {e}") # ADDED DEBUG
         await crud.add_agent_job_log(db, job_id, "error", f"An unexpected error occurred: {e}")
         crud.update_agent_job_status(db, job_id, "failed", final_output=f"Error: {e}")

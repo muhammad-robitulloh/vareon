@@ -103,7 +103,7 @@ def create_agent_job(
     goal: str, 
     message_history: Optional[List[Dict[str, Any]]] = None,
     original_request: Optional[schemas.AgentExecuteRequest] = None
-) -> DBArcanaAgentJob:
+) -> schemas.ArcanaAgentJobResponse: # Change return type hint
     """
     Creates a new job for an Arcana agent.
     """
@@ -119,19 +119,58 @@ def create_agent_job(
     db.add(db_job)
     db.commit()
     db.refresh(db_job)
-    return db_job
 
-def get_agent_job(db: Session, job_id: str, owner_id: str) -> Optional[DBArcanaAgentJob]:
+    # Explicitly create and return the Pydantic response model
+    deserialized_message_history = json.loads(db_job.message_history) if db_job.message_history else None
+    deserialized_original_request = schemas.AgentExecuteRequest.parse_obj(json.loads(db_job.original_request)) if db_job.original_request else None
+
+    return schemas.ArcanaAgentJobResponse(
+        id=db_job.id,
+        agent_id=db_job.agent_id,
+        owner_id=db_job.owner_id,
+        status=db_job.status,
+        goal=db_job.goal,
+        created_at=db_job.created_at,
+        updated_at=db_job.updated_at,
+        ended_at=db_job.ended_at,
+        final_output=db_job.final_output,
+        message_history=deserialized_message_history,
+        original_request=deserialized_original_request
+    )
+
+def get_agent_job(db: Session, job_id: str, owner_id: str) -> Optional[schemas.ArcanaAgentJobResponse]: # Change return type
     """
     Retrieves a specific agent job.
     """
     db_job = db.query(DBArcanaAgentJob).filter(DBArcanaAgentJob.id == job_id, DBArcanaAgentJob.owner_id == owner_id).first()
     if db_job:
+        deserialized_message_history = None
         if db_job.message_history:
-            db_job.message_history = json.loads(db_job.message_history)
+            deserialized_message_history = json.loads(db_job.message_history)
+        
+        deserialized_original_request = None
         if db_job.original_request:
-            db_job.original_request = schemas.AgentExecuteRequest.parse_raw(db_job.original_request)
-    return db_job
+            try:
+                parsed_request = json.loads(db_job.original_request)
+                deserialized_original_request = schemas.AgentExecuteRequest.parse_obj(parsed_request)
+            except (json.JSONDecodeError, ValueError):
+                deserialized_original_request = None
+        
+        # Create and return the Pydantic response model explicitly
+        return schemas.ArcanaAgentJobResponse(
+            id=db_job.id,
+            agent_id=db_job.agent_id,
+            owner_id=db_job.owner_id,
+            status=db_job.status,
+            goal=db_job.goal,
+            created_at=db_job.created_at,
+            updated_at=db_job.updated_at,
+            ended_at=db_job.ended_at,
+            final_output=db_job.final_output,
+            message_history=deserialized_message_history,
+            original_request=deserialized_original_request
+        )
+    return None
 
 def update_agent_job_status(db: Session, job_id: str, status: str, final_output: str = None, message_history: Optional[List[Dict[str, Any]]] = None):
     """
@@ -206,21 +245,45 @@ def get_recent_agent_job_logs(db: Session, job_id: str, limit: int = 5) -> List[
         .limit(limit).all()
     return [schemas.ArcanaAgentJobLogResponse.from_orm(log) for log in reversed(logs)] # Return in chronological order
 
-def get_agent_jobs_for_agent(db: Session, agent_id: str, owner_id: str, skip: int = 0, limit: int = 10) -> List[DBArcanaAgentJob]:
+def get_agent_jobs_for_agent(db: Session, agent_id: str, owner_id: str, skip: int = 0, limit: int = 10) -> List[schemas.ArcanaAgentJobResponse]: # Change return type
     """
     Retrieves all jobs for a specific agent.
     """
-    jobs = db.query(DBArcanaAgentJob).filter(
+    db_jobs = db.query(DBArcanaAgentJob).filter(
         DBArcanaAgentJob.agent_id == agent_id,
         DBArcanaAgentJob.owner_id == owner_id
     ).order_by(DBArcanaAgentJob.created_at.desc()).offset(skip).limit(limit).all()
     
-    for job in jobs:
-        if job.message_history:
-            job.message_history = json.loads(job.message_history)
-        if job.original_request:
-            job.original_request = schemas.AgentExecuteRequest.parse_raw(job.original_request)
-    return jobs
+    response_jobs = []
+    for db_job in db_jobs:
+        deserialized_message_history = None
+        if db_job.message_history:
+            deserialized_message_history = json.loads(db_job.message_history)
+        
+        deserialized_original_request = None
+        if db_job.original_request:
+            try:
+                parsed_request = json.loads(db_job.original_request)
+                deserialized_original_request = schemas.AgentExecuteRequest.parse_obj(parsed_request)
+            except (json.JSONDecodeError, ValueError):
+                deserialized_original_request = None
+        
+        response_jobs.append(
+            schemas.ArcanaAgentJobResponse(
+                id=db_job.id,
+                agent_id=db_job.agent_id,
+                owner_id=db_job.owner_id,
+                status=db_job.status,
+                goal=db_job.goal,
+                created_at=db_job.created_at,
+                updated_at=db_job.updated_at,
+                ended_at=db_job.ended_at,
+                final_output=db_job.final_output,
+                message_history=deserialized_message_history,
+                original_request=deserialized_original_request
+            )
+        )
+    return response_jobs
 
 
 ### Arcana API Key CRUD Operations ###
@@ -269,6 +332,8 @@ def get_api_key_by_key(db: Session, api_key: str) -> Optional[DBArcanaApiKey]:
             decrypted_key = decrypt_api_key(db_key.key)
             if decrypted_key == api_key:
                 return db_key
+        except InvalidToken:
+            pass # Ignore invalid tokens, treat as not found
         except Exception as e:
             # Log decryption errors but don't expose them
             print(f"Error decrypting API key {db_key.id}: {e}")
@@ -308,45 +373,65 @@ def rotate_api_key(db: Session, api_key_id: str, owner_id: str, new_key_name: st
 ### User CLI Configuration CRUD Operations ###
 from server_python.database import UserCliConfig as DBUserCliConfig # Import the UserCliConfig model
 
-def create_or_update_user_cli_config(db: Session, user_id: str, config_data: UserCliConfigCreate) -> DBUserCliConfig:
+def create_or_update_user_cli_config(db: Session, user_id: str, config_data: schemas.UserCliConfigCreate) -> DBUserCliConfig:
     """
     Creates a new user CLI configuration or updates an existing one.
     """
     db_config = db.query(DBUserCliConfig).filter(
         DBUserCliConfig.user_id == user_id,
-        DBUserCliConfig.key == config_data.key
+        DBUserCliConfig.key == config_data.config_key
     ).first()
 
     if db_config:
-        db_config.value = config_data.value
+        db_config.value = json.dumps(config_data.config_value) # Ensure JSON is dumped
         db.commit()
         db.refresh(db_config)
     else:
         db_config = DBUserCliConfig(
             id=str(uuid.uuid4()),
             user_id=user_id,
-            key=config_data.key,
-            value=config_data.value
+            key=config_data.config_key,
+            value=json.dumps(config_data.config_value) # Ensure JSON is dumped
         )
         db.add(db_config)
         db.commit()
         db.refresh(db_config)
     return db_config
 
-def get_user_cli_config(db: Session, user_id: str, key: str) -> Optional[DBUserCliConfig]:
+def get_user_cli_config(db: Session, user_id: str, key: str) -> Optional[schemas.UserCliConfigResponse]: # Change return type
     """
     Retrieves a specific user CLI configuration by key.
     """
-    return db.query(DBUserCliConfig).filter(
+    db_config = db.query(DBUserCliConfig).filter(
         DBUserCliConfig.user_id == user_id,
         DBUserCliConfig.key == key
     ).first()
+    if db_config:
+        return schemas.UserCliConfigResponse(
+            id=db_config.id,
+            user_id=db_config.user_id,
+            config_key=db_config.key,
+            config_value=json.loads(db_config.value),
+            created_at=db_config.created_at,
+            updated_at=db_config.updated_at
+        )
+    return None
 
-def get_all_user_cli_configs(db: Session, user_id: str, skip: int = 0, limit: int = 100) -> List[DBUserCliConfig]:
+def get_all_user_cli_configs(db: Session, user_id: str, skip: int = 0, limit: int = 100) -> List[schemas.UserCliConfigResponse]: # Change return type
     """
-    Retrieves all CLI configurations for a specific user.
+    Retrieves all CLI configuration settings for a specific user.
     """
-    return db.query(DBUserCliConfig).filter(DBUserCliConfig.user_id == user_id).offset(skip).limit(limit).all()
+    db_configs = db.query(DBUserCliConfig).filter(DBUserCliConfig.user_id == user_id).offset(skip).limit(limit).all()
+    return [
+        schemas.UserCliConfigResponse(
+            id=db_config.id,
+            user_id=db_config.user_id,
+            config_key=db_config.key,
+            config_value=json.loads(db_config.value),
+            created_at=db_config.created_at,
+            updated_at=db_config.updated_at
+        ) for db_config in db_configs
+    ]
 
 def delete_user_cli_config(db: Session, user_id: str, key: str) -> Optional[DBUserCliConfig]:
     """
@@ -360,4 +445,3 @@ def delete_user_cli_config(db: Session, user_id: str, key: str) -> Optional[DBUs
         db.delete(db_config)
         db.commit()
     return db_config
-

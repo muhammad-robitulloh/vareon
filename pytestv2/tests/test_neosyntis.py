@@ -11,13 +11,16 @@ from typing import List
 import json # Added this line
 from io import BytesIO
 import stat # Added this line
+import shutil # Added this line for cleanup
 
-# Add the server-python directory to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from main import app, get_db
+
+
+
+from server_python.main import app
+from server_python.database import get_db
 from server_python.database import Base, User, Workflow, Dataset, MLModel, TrainingJob, Permission, Role, TelemetryData
-from auth import get_password_hash, PermissionChecker, get_current_user
+from server_python.auth import get_password_hash, PermissionChecker, get_current_user
 
 # Setup test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_neosyntis.db"
@@ -116,7 +119,7 @@ def admin_auth_headers_fixture(client, admin_user):
 @pytest.fixture
 def override_admin_permission_checker(admin_user, mocker: MockerFixture):
     # Mock has_permission to always return True for admin_access
-    mocker.patch("auth.has_permission", return_value=True)
+    mocker.patch("server_python.auth.has_permission", return_value=True)
     yield
 
 # --- Workflow Management Tests ---
@@ -708,3 +711,14 @@ def test_read_training_job(client, auth_headers, db_session, test_user):
     assert response.json()["model_id"] == ml_model.id
     assert response.json()["status"] == "running"
     assert response.json()["metrics"] == {"loss": 0.1}
+
+# Cleanup the test database and dataset directory after tests run
+@pytest.fixture(scope="module", autouse=True)
+def cleanup():
+    yield
+    if os.path.exists("./test_neosyntis.db"):
+        os.remove("./test_neosyntis.db")
+    # Get DATASET_STORAGE_DIR from environment as it's set in conftest.py
+    dataset_storage_dir = os.environ.get("DATASET_STORAGE_DIR")
+    if dataset_storage_dir and os.path.exists(dataset_storage_dir):
+        shutil.rmtree(dataset_storage_dir)

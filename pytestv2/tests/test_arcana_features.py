@@ -11,13 +11,7 @@ import shutil # For cleaning up test directories
 from datetime import datetime # Add this line
 from fastapi import HTTPException # Add this line
 
-# Set DATASET_STORAGE_DIR for tests to a writable temporary location
-TEST_DATASET_STORAGE_DIR = os.path.join(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.gemini', 'tmp')),
-    "arcana_features_test_datasets"
-)
-os.environ["DATASET_STORAGE_DIR"] = TEST_DATASET_STORAGE_DIR
-os.makedirs(TEST_DATASET_STORAGE_DIR, exist_ok=True)
+
 
 # Set BASE_FILE_OPERATIONS_DIR for tests to a writable temporary location
 TEST_FILE_OPERATIONS_DIR = os.path.join(
@@ -27,17 +21,18 @@ TEST_FILE_OPERATIONS_DIR = os.path.join(
 os.environ["BASE_FILE_OPERATIONS_DIR"] = TEST_FILE_OPERATIONS_DIR
 os.makedirs(TEST_FILE_OPERATIONS_DIR, exist_ok=True)
 
-# Add the server_python directory to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 
 from server_python.main import app, get_db
-from server_python.database import Base, User, LLMProvider, LLMModel, ArcanaAgent
+from server_python.database import Base, User, LLMProvider, LLMModel, ArcanaAgent, UserLLMPreference
 from server_python.auth import get_password_hash, PermissionChecker, get_current_user
 from server_python.cognisys.crud import encrypt_api_key
-from server_python.arcana import crud
+from server_python.arcana import crud, schemas
 
 # Setup test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_arcana_features.db" # Use a different DB file for arcana tests
+TEST_DB_DIR = os.path.join("/data/data/com.termux/files/home/.gemini/tmp/3a59f8101e7a549774232366d05894201b607f6feaf9734438d49855b51ee2b9", "arcana_test_dbs")
+os.makedirs(TEST_DB_DIR, exist_ok=True)
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{TEST_DB_DIR}/test_arcana_features.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
@@ -77,7 +72,7 @@ def override_admin_permission_checker(admin_user, mocker: MockerFixture):
     yield
 
 @pytest.fixture(name="test_user")
-def test_user_fixture(db_session):
+def test_user_fixture(db_session, setup_llm_models): # Add setup_llm_models here
     user_id = "d228678f-7e76-47ed-aa00-be9470c0ce79" # Hardcoded ID
     user = db_session.query(User).filter(User.id == user_id).first()
     if not user:
@@ -86,6 +81,22 @@ def test_user_fixture(db_session):
         db_session.add(user)
         db_session.commit()
         db_session.refresh(user)
+    
+    # Ensure test user has a default LLM preference
+    user_pref = db_session.query(UserLLMPreference).filter(UserLLMPreference.user_id == user_id).first()
+    if not user_pref:
+        user_pref = UserLLMPreference(
+            user_id=user_id,
+            default_model_id=setup_llm_models["general_chat_model"].id # Set a default model
+        )
+        db_session.add(user_pref)
+        db_session.commit()
+        db_session.refresh(user_pref)
+    elif user_pref.default_model_id != setup_llm_models["general_chat_model"].id:
+        user_pref.default_model_id = setup_llm_models["general_chat_model"].id
+        db_session.commit()
+        db_session.refresh(user_pref)
+
     return user
 
 @pytest.fixture(name="admin_user")
@@ -487,11 +498,18 @@ def test_execute_agent_task_tool_user_mode(client, auth_headers, db_session, tes
 
 def test_execute_agent_task_autonomous_mode(client, auth_headers, db_session, test_user, setup_llm_models, mocker: MockerFixture):
     mocker.patch("server_python.arcana.agent_orchestration_service.call_llm_api", side_effect=mock_call_llm_api_agent_tools)
-    async def mock_reflect_side_effect(db, user, job_id, context):
-        print(f"DEBUG: mock_reflect_side_effect called for job_id: {job_id}")
-        crud.add_agent_job_log(db, job_id, "thought", "Reflection summary: Mocked reasoning summary")
-        return "Mocked reasoning summary"
-    mocker.patch("server_python.arcana.agent_orchestration_service.reflect", side_effect=mock_reflect_side_effect)
+    
+    # Mock generate_reasoning to return a successful ReasoningResponse
+    async def mock_generate_reasoning_side_effect(db, user, request):
+        return schemas.ReasoningResponse(
+            success=True,
+            summary="Mocked successful reasoning summary",
+            reasoning_trace=[
+                {"step_number": 1, "description": "Mocked step 1", "action": "mock_action_1", "outcome": "mock_outcome_1"}
+            ],
+            model_used="reasoning-model"
+        )
+    mocker.patch("server_python.arcana.agent_orchestration_service.generate_reasoning", side_effect=mock_generate_reasoning_side_effect)
     mocker.patch("server_python.arcana.agent_orchestration_service.TerminalService")
     agent = ArcanaAgent(
         id=str(uuid.uuid4()), owner_id=str(test_user.id), name="AutoAgent",
@@ -523,14 +541,16 @@ def test_execute_agent_task_autonomous_mode(client, auth_headers, db_session, te
     # Check logs for actions
     logs_response = client.get(f"/api/arcana/jobs/{job_id}/logs", headers=auth_headers)
     logs = logs_response.json()
-    assert any("Reflection summary: Mocked reasoning summary" in log["content"] for log in logs)
+    assert any("Reflection summary: Mocked successful reasoning summary" in log["content"] for log in logs)
     assert "Agent did not call a tool." in final_job_status["final_output"]
 # Cleanup the test database and dataset/file_ops directories after tests run
 def teardown_module(module):
     import os
     if os.path.exists("./test_arcana_features.db"):
         os.remove("./test_arcana_features.db")
-    if os.path.exists(TEST_DATASET_STORAGE_DIR):
-        shutil.rmtree(TEST_DATASET_STORAGE_DIR)
+    # Get DATASET_STORAGE_DIR from environment as it's set in conftest.py
+    dataset_storage_dir = os.environ.get("DATASET_STORAGE_DIR")
+    if dataset_storage_dir and os.path.exists(dataset_storage_dir):
+        shutil.rmtree(dataset_storage_dir)
     if os.path.exists(TEST_FILE_OPERATIONS_DIR):
         shutil.rmtree(TEST_FILE_OPERATIONS_DIR)

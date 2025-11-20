@@ -8,12 +8,14 @@ import uuid
 from datetime import datetime, timedelta
 from pytest_mock import MockerFixture
 
-# Add the server-python directory to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from main import app, get_db
+
+
+
+from server_python.main import app
+from server_python.database import get_db
 from server_python.database import Base, User, Agent, Device, Job, ScheduledTask, TaskRun, Permission, Role
-from auth import get_password_hash
+from server_python.auth import get_password_hash, PermissionChecker, get_current_user
 
 # Setup test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_myntrix.db"
@@ -109,7 +111,7 @@ def admin_auth_headers_fixture(client, admin_user):
 @pytest.fixture
 def override_admin_permission_checker(admin_user, mocker: MockerFixture):
     # Mock has_permission to always return True for admin_access
-    mocker.patch("auth.has_permission", return_value=True)
+    mocker.patch("server_python.auth.has_permission", return_value=True)
     yield
 
 ### Tests for Agent Management ###

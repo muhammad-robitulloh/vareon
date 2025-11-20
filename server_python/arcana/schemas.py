@@ -265,8 +265,8 @@ class ArcanaAgentJobResponse(ArcanaAgentJobBase):
     updated_at: datetime
     ended_at: Optional[datetime] = None
     final_output: Optional[str] = None
-    message_history: Optional[List[Dict[str, Any]]] = None # New: Stores JSON of LLM messages
-    original_request: Optional[AgentExecuteRequest] = None # New: Stores JSON of original AgentExecuteRequest
+    message_history: Optional[List[Dict[str, Any]]] = Field(None, nullable=True) # New: Stores JSON of LLM messages
+    original_request: Optional[AgentExecuteRequest] = Field(None, nullable=True) # New: Stores JSON of original AgentExecuteRequest
     logs: List[ArcanaAgentJobLogResponse] = []
 
     class Config:

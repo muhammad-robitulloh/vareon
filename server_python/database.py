@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional, List
 import uuid # Import uuid
 from .encryption_utils import encrypt_api_key
+import json # Add this import
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
 
@@ -383,8 +384,8 @@ class ArcanaAgentJob(Base):
     owner_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     status = Column(String, default="starting") # e.g., starting, planning, coding, testing, awaiting_human_input, completed, failed
     goal = Column(Text, nullable=False)
-    message_history = Column(Text, nullable=True) # New: Stores JSON of LLM messages
-    original_request = Column(Text, nullable=True) # New: Stores JSON of original AgentExecuteRequest
+    message_history = Column(Text, nullable=True) 
+    original_request = Column(Text, nullable=True) 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
@@ -401,6 +402,7 @@ class ArcanaAgentJob(Base):
     # New relationships for hierarchical jobs
     parent_job = relationship("ArcanaAgentJob", remote_side=[id], back_populates="child_jobs")
     child_jobs = relationship("ArcanaAgentJob", back_populates="parent_job", cascade="all, delete-orphan")
+
 
 class ArcanaAgentJobLog(Base):
     __tablename__ = "arcana_agent_job_logs"

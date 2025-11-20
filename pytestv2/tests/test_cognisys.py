@@ -8,17 +8,8 @@ import uuid # Added this line
 from pytest_mock import MockerFixture
 from typing import List # Added this line
 import shutil # For cleaning up test directories
+from sqlalchemy.orm import joinedload # Add this import
 
-# Set DATASET_STORAGE_DIR for tests to a writable temporary location
-TEST_DATASET_STORAGE_DIR = os.path.join(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.gemini', 'tmp')),
-    "cognisys_test_datasets"
-)
-os.environ["DATASET_STORAGE_DIR"] = TEST_DATASET_STORAGE_DIR
-os.makedirs(TEST_DATASET_STORAGE_DIR, exist_ok=True)
-
-# Add the project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from server_python.main import app, get_db
 from server_python.database import Base, User, LLMProvider, LLMModel, RoutingRule, Permission, Role
@@ -98,18 +89,15 @@ def admin_user_fixture(db_session):
         db_session.flush()
         db_session.refresh(admin_role)
     
-    admin_role.permissions.append(admin_permission)
-    admin.roles.append(admin_role)
-
+    admin.roles.append(admin_role) # Directly append the role to admin.roles
     db_session.flush() # Flush after appending roles to ensure relationships are handled
-    db_session.refresh(admin)
-    
-    # Explicitly commit here to make the user available for authentication
-    # The outer transactional fixture will roll this back at the end of the test
-    db_session.commit() 
-    db_session.refresh(admin) # Refresh again after commit
+    db_session.refresh(admin) # Refresh admin to ensure relationships are loaded
 
-    return admin
+    # Eagerly load roles and permissions before yielding
+    admin_with_roles = db_session.query(User).options(
+        joinedload(User.roles).joinedload(Role.permissions)
+    ).filter(User.id == admin.id).first()
+    return admin_with_roles
 
 @pytest.fixture(name="auth_headers")
 def auth_headers_fixture(client, test_user):
@@ -135,12 +123,7 @@ def admin_auth_headers_fixture(client, admin_user, mocker: MockerFixture):
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
-def override_get_current_admin_user(admin_user, db_session):
-    # Re-add the admin_user to the current session to make it "bound"
-    db_session.add(admin_user)
-    db_session.flush() # Ensure it's in the session's state
-    db_session.refresh(admin_user) # Refresh to load relationships if needed
-
+def override_get_current_admin_user(admin_user: User): # Directly use the admin_user fixture
     app.dependency_overrides[get_current_user] = lambda: admin_user
     yield
     app.dependency_overrides.pop(get_current_user)
