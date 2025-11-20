@@ -32,7 +32,6 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: Layers, label: 'VAREON', path: '/', module: 'vareon' },
   { icon: Search, label: 'NEOSYNTIS', path: '/dashboard/neosyntis', module: 'neosyntis' },
   { icon: Cpu, label: 'MYNTRIX', path: '/dashboard/myntrix', module: 'myntrix' },
   { icon: Network, label: 'COGNISYS', path: '/dashboard/cognisys', module: 'cognisys' },

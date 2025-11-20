@@ -4,6 +4,7 @@ import { Mail, User, Lock, Loader2, Github, Chrome } from "lucide-react"; // Add
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function AuthForm() {
   const [isLogin, setIsLogin] = useState(true);
@@ -130,10 +131,10 @@ export default function AuthForm() {
   const isLoading = loginMutation.isPending || registerMutation.isPending;
 
   return (
-    <Card className="w-full max-w-md mx-auto bg-card/80 backdrop-blur-sm border-primary/20 shadow-lg">
+    <Card className="w-full max-w-md mx-auto card-glow bg-card">
       <CardHeader className="text-center">
-        <CardTitle className="text-3xl font-bold">{isLogin ? "Welcome Back" : "Create Account"}</CardTitle>
-        <CardDescription>{isLogin ? "Sign in to access your dashboard" : "Get started with VAREON"}</CardDescription>
+        <CardTitle className="text-3xl font-bold text-primary">{isLogin ? "Welcome Back" : "Create Account"}</CardTitle>
+        <CardDescription className="text-muted-foreground">{isLogin ? "Sign in to access your dashboard" : "Get started with VAREON"}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -150,20 +151,29 @@ export default function AuthForm() {
             />
           </div>
           
-          <div className={`transition-all duration-300 ease-in-out ${isLogin ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-20 opacity-100'}`}>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                id="username"
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required={!isLogin}
-                className="pl-10"
-              />
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {!isLogin && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="Username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required={!isLogin}
+                    className="pl-10"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -183,16 +193,16 @@ export default function AuthForm() {
           </Button>
           
           <div className="relative flex items-center py-5">
-            <div className="flex-grow border-t border-gray-400"></div>
-            <span className="flex-shrink mx-4 text-gray-400 text-sm">OR</span>
-            <div className="flex-grow border-t border-gray-400"></div>
+            <div className="flex-grow border-t border-border"></div>
+            <span className="flex-shrink mx-4 text-muted-foreground text-sm">OR</span>
+            <div className="flex-grow border-t border-border"></div>
           </div>
 
           <div className="space-y-3">
-            <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGoogleLogin}>
+            <Button type="button" variant="outline" className="w-full gap-2 border-primary text-primary hover:bg-primary/10" onClick={handleGoogleLogin}>
               <Chrome className="h-5 w-5" /> Login with Google
             </Button>
-            <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGitHubLogin}>
+            <Button type="button" variant="outline" className="w-full gap-2 border-primary text-primary hover:bg-primary/10" onClick={handleGitHubLogin}>
               <Github className="h-5 w-5" /> Login with GitHub
             </Button>
           </div>

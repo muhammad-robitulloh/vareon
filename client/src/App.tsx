@@ -1,13 +1,14 @@
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster, TooltipProvider, SidebarProvider, SidebarTrigger, Sidebar } from '@/components/ui';
+import { Toaster, TooltipProvider } from '@/components/ui';
 import { ThemeProvider } from "@/components/dashboard/theme-provider";
 import { CommandPalette } from "@/components/dashboard/command-palette";
-import { AppSidebar } from "@/components/dashboard/app-sidebar";
-import { Navbar } from "@/components/dashboard/navbar";
-import { MainSidebarContent, ProtectedRoute } from '@/components';
+
+import AppLayout from "./components/AppLayout";
 import { Helmet } from "react-helmet-async";
+import DashboardRoutes from "./components/DashboardRoutes"; // Import DashboardRoutes
+import { AnimatePresence, motion } from "framer-motion"; // Import AnimatePresence and motion
 
 import {
   Home,
@@ -18,22 +19,7 @@ import {
   Auth,
   VerifyEmail,
   WaitingForVerification,
-  PricingPage,
-  AuraPage, // Add this
-  NexaPage, // Add this
 } from '@/pages';
-  
-  
-  import {
-    NotFound as NotFoundDash,
-    Dashboard,
-    Neosyntis,
-    Myntrix,
-    Cognisys as CognisysPage,
-    Arcana,
-    UserProfile, // Import UserProfile
-  } from '@/pages/dashboard-pages';
-  import ArcanaCliManager from '@/components/dashboard/ArcanaCliManager'; // Import ArcanaCliManager
   
   function Router() {
     return (
@@ -45,29 +31,26 @@ import {
         <Route path="/auth" component={Auth} />
         <Route path="/verify-email" component={VerifyEmail} />
         <Route path="/waiting-for-verification" component={WaitingForVerification} />
-        <ProtectedRoute>
-          <Route path="/pricing" component={PricingPage} /> {/* Add the new pricing route */}
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/dashboard/neosyntis" component={Neosyntis} />
-          <Route path="/dashboard/myntrix" component={Myntrix} />
-          <Route path="/dashboard/cognisys" component={CognisysPage} />
-          <Route path="/dashboard/arcana" component={Arcana} />
-          <Route path="/dashboard/arcana/cli" component={ArcanaCliManager} /> {/* New Arcana CLI Manager Route */}
-          <Route path="/dashboard/profile" component={UserProfile} /> {/* New User Profile Route */}
-          <Route path="/dashboard/aura" component={AuraPage} /> {/* New Aura Route */}
-          <Route path="/dashboard/nexa" component={NexaPage} /> {/* New Nexa Route */}
-        </ProtectedRoute>
-     <Route component={NotFound} />
+        <Route path="/dashboard/:rest*" component={DashboardRoutes} />
+        <Route path="/pricing" component={DashboardRoutes} />
+        <Route component={NotFound} />
       </Switch>
     );
   }
   export default function App() {
-  const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
+  const [location] = useLocation(); // Get current location for AnimatePresence key
+
+  const pageVariants = {
+    initial: { opacity: 0, x: 50 },
+    in: { opacity: 1, x: 0 },
+    out: { opacity: 0, x: -50 }
   };
 
-  const [location] = useLocation();
+  const pageTransition = {
+    type: "tween",
+    ease: "anticipate",
+    duration: 0.4
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -79,28 +62,21 @@ import {
       </Helmet>
       <ThemeProvider>
         <TooltipProvider>
-          <SidebarProvider style={style as React.CSSProperties}>
-            <div className="flex h-screen w-full">
-              {location.startsWith("/dashboard") && ( // Only render sidebar if on a dashboard route
-                <Sidebar>
-                  <AppSidebar />
-                </Sidebar>
-              )}
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <header className="flex items-center justify-between p-3 border-b bg-card">
-                  {location.startsWith("/dashboard") && ( // Only show sidebar toggle on dashboard routes
-                    <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  )}
-                  <div className="flex items-center gap-2">
-                    {/* ThemeToggle removed from here */}
-                  </div>
-                </header>
-                <main className="flex-1 overflow-auto">
-                  <Router />
-                </main>
-              </div>
-            </div>
-          </SidebarProvider>
+          <AppLayout>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={location}
+                initial="initial"
+                animate="in"
+                exit="out"
+                variants={pageVariants}
+                transition={pageTransition}
+                className="h-full w-full"
+              >
+                <Router />
+              </motion.div>
+            </AnimatePresence>
+          </AppLayout>
           <CommandPalette />
           <Toaster />
         </TooltipProvider>
@@ -108,3 +84,4 @@ import {
     </QueryClientProvider>
   );
 }
+

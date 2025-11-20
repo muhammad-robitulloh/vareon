@@ -26,26 +26,26 @@ export default function Arcana() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="border-b bg-card px-6 py-4">
+    <div className="h-full">
+      <div className="border-b border-border bg-card/50 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">ARCANA Cognitive System</h1>
+            <h1 className="text-2xl font-bold text-foreground text-glow">ARCANA Cognitive System</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Conversational AI & Shell Interface
             </p>
           </div>
-          <Badge variant="outline">GPT-4 Active</Badge>
+          <Badge variant="outline" className="border-primary text-primary">GPT-4 Active</Badge>
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
-          <div className="border-b bg-card/50 px-6">
+          <div className="border-b border-border bg-card px-6">
             <TabsList className="bg-transparent h-12">
               <TabsTrigger
                 value="chat"
-                className="gap-2 data-[state=active]:bg-background"
+                className="gap-2"
                 data-testid="tab-chat"
               >
                 <MessageSquare className="h-4 w-4" />
@@ -53,7 +53,7 @@ export default function Arcana() {
               </TabsTrigger>
               <TabsTrigger
                 value="terminal"
-                className="gap-2 data-[state=active]:bg-background"
+                className="gap-2"
                 data-testid="tab-terminal"
               >
                 <Terminal className="h-4 w-4" />
@@ -61,7 +61,7 @@ export default function Arcana() {
               </TabsTrigger>
               <TabsTrigger
                 value="memory"
-                className="gap-2 data-[state=active]:bg-background"
+                className="gap-2"
                 data-testid="tab-memory"
               >
                 <Brain className="h-4 w-4" /> {/* Using Brain icon for Context Memory */}
@@ -69,7 +69,7 @@ export default function Arcana() {
               </TabsTrigger>
               <TabsTrigger
                 value="agent"
-                className="gap-2 data-[state=active]:bg-background"
+                className="gap-2"
                 data-testid="tab-agent"
               >
                 <Bot className="h-4 w-4" /> {/* Using Bot icon for Arcana Mode Agent */}

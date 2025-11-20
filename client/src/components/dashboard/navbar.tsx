@@ -2,18 +2,24 @@ import { Search, Bell } from 'lucide-react';
 import { ThemeToggle } from './theme-provider';
 import { useStore } from '@/lib/dashboard/store';
 import { Button, Input, Badge, Avatar, AvatarFallback, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui';
+import { motion } from "framer-motion";
 
 export function Navbar() {
   const { toggleCommandPalette, performanceMode, togglePerformanceMode } = useStore();
 
   return (
-    <nav className="h-14 border-b bg-card flex items-center justify-between px-4 gap-4" data-testid="navbar">
+    <nav className="h-14 flex items-center justify-between px-4 gap-4" data-testid="navbar">
       <div className="flex items-center gap-4 flex-1">
         <div className="flex items-center gap-2" data-testid="logo">
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-primary to-accent flex items-center justify-center font-mono font-bold text-sm" data-testid="logo-icon">
-            V
-          </div>
-          <span className="font-semibold text-lg hidden sm:inline" data-testid="logo-text">VAREON</span>
+          <motion.div
+            className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center font-mono font-bold text-sm"
+            whileHover={{ scale: 1.05 }}
+            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            data-testid="logo-icon"
+          >
+            <span className="text-primary-foreground text-lg">V</span>
+          </motion.div>
+          <span className="font-extrabold text-xl hidden sm:inline text-foreground text-glow" data-testid="logo-text">VAREON</span>
         </div>
 
         <div className="relative flex-1 max-w-md">
@@ -25,7 +31,7 @@ export function Navbar() {
             readOnly
             data-testid="input-global-search"
           />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100" data-testid="kbd-shortcut">
+          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-card px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100" data-testid="kbd-shortcut">
             <span className="text-xs">⌘</span>K
           </kbd>
         </div>
@@ -58,7 +64,7 @@ export function Navbar() {
               data-testid="button-user-menu"
             >
               <Avatar className="h-9 w-9">
-                <AvatarFallback className="bg-gradient-to-br from-primary to-accent" data-testid="avatar-initials">
+                <AvatarFallback className="bg-primary" data-testid="avatar-initials">
                   AD
                 </AvatarFallback>
               </Avatar>
