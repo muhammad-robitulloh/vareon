@@ -270,6 +270,12 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                     messages=messages, api_key=api_key, tools=all_tools_schema
                 )
                 response_message = llm_response.get("message", {})
+                
+                # Remove non-standard fields from response_message if present
+                response_message.pop("refusal", None)
+                response_message.pop("reasoning", None)
+                response_message.pop("reasoning_details", None)
+
                 messages.append(response_message)
                 if not response_message.get("tool_calls"):
                     final_output = response_message.get("content", "Agent completed task.")

@@ -208,16 +208,22 @@ def update_agent_job_status(db: Session, job_id: str, status: str, final_output:
 
 from server_python.orchestrator.connection_manager import manager # Import the WebSocket manager
 
-async def add_agent_job_log(db: Session, job_id: str, log_type: str, content: str):
+async def add_agent_job_log(db: Session, job_id: str, log_type: str, content: Any):
     """
     Adds a log entry to an agent job and sends it via WebSocket.
     """
+    # Serialize content if it's a dictionary or list
+    if isinstance(content, (dict, list)):
+        serialized_content = json.dumps(content)
+    else:
+        serialized_content = str(content) # Ensure content is always a string
+
     db_log = DBArcanaAgentJobLog(
         id=str(uuid.uuid4()),
         job_id=job_id,
         timestamp=datetime.utcnow(),
         log_type=log_type,
-        content=content
+        content=serialized_content
     )
     db.add(db_log)
     db.commit()

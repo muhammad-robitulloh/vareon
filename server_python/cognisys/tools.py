@@ -142,23 +142,7 @@ async def git_create_branch(db: Session, user: User, terminal_service: TerminalS
 # This tells the LLM how to call our function.
 
 tools_schema = [
-    {
-        "type": "function",
-        "function": {
-            "name": "execute_shell_command",
-            "description": "Executes a simple, single-line shell command in the user's sandboxed environment and returns the output. Useful for listing files, reading file content, or quick checks. Not for complex or multi-step operations.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "The shell command to execute (e.g., 'ls -l', 'cat my_file.txt').",
-                    }
-                },
-                "required": ["command"],
-            },
-        },
-    },
+
     {
         "type": "function",
         "function": {
