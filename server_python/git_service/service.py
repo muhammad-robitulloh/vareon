@@ -30,6 +30,7 @@ class GitService:
         if not local_path:
             raise HTTPException(status_code=400, detail="Local path cannot be empty.")
         abs_path = os.path.abspath(os.path.join(self.user_repos_base_dir, local_path))
+        print(f"DEBUG: GitService._get_repo_path calculated absolute path: {abs_path}") # ADDED DEBUG PRINT
         if not abs_path.startswith(self.user_repos_base_dir):
             raise HTTPException(status_code=400, detail="Invalid repository path: outside user's allowed directory.")
         return abs_path

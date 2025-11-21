@@ -144,6 +144,8 @@ AGENT_TOOLS_SCHEMA = [
     schemas.RETRIEVE_CONTEXT_ITEMS_TOOL_SCHEMA # Add the new retrieve context items tool schema
 ]
 
+
+
 # Define agent-specific tool registry
 agent_tool_registry: Dict[str, Callable] = {
     "reflect": reflect,
@@ -157,6 +159,14 @@ agent_tool_registry: Dict[str, Callable] = {
     "execute_shell_command": lambda terminal_service, command, current_directory=None: terminal_service.execute_command(command, current_directory=current_directory),
     "store_context_item": lambda db, user, item_type, key, value: context_crud.create_context_item(db=db, user_id=str(user.id), key=f"{context_crud.CONTEXT_KEY_PREFIXES.get(item_type)}{key}", value=value),
     "retrieve_context_items": lambda db, user, item_type=None, key=None: context_crud.get_all_context_for_user(db=db, user_id=str(user.id)) if not item_type and not key else [item for category in context_crud.get_all_context_for_user(db=db, user_id=str(user.id)).values() for item in category if (not item_type or item.get('type') == item_type) and (not key or item.get('key') == key)],
+    "git_clone_repo": lambda git_service, repo_url, local_path, pat=None, branch="main": git_service.clone_repo(request=schemas.GitCloneRequest(repo_url=repo_url, local_path=local_path, pat=pat, branch=branch)),
+    "git_get_status": lambda git_service, local_path: git_service.get_status(local_path=local_path),
+    "git_add_files": lambda git_service, local_path, files: git_service.add_files(local_path=local_path, request=schemas.GitAddRequest(files=files)),
+    "git_commit_changes": lambda git_service, local_path, message, author_name=None, author_email=None: git_service.commit_changes(local_path=local_path, request=schemas.GitCommitRequest(message=message, author_name=author_name, author_email=author_email)),
+    "git_push_changes": lambda git_service, local_path, remote_name="origin", branch_name=None: git_service.push_changes(local_path=local_path, request=schemas.GitPushRequest(remote_name=remote_name, branch_name=branch_name)),
+    "git_pull_changes": lambda git_service, local_path, remote_name="origin", branch_name=None: git_service.pull_changes(local_path=local_path, request=schemas.GitPullRequest(remote_name=remote_name, branch_name=branch_name)),
+    "git_checkout_branch": lambda git_service, local_path, branch_name: git_service.checkout_branch(local_path=local_path, request=schemas.GitCheckoutRequest(branch_name=branch_name)),
+    "git_create_branch": lambda git_service, local_path, branch_name: git_service.create_branch(local_path=local_path, request=schemas.GitCreateBranchRequest(branch_name=branch_name)),
 }
 
 
@@ -354,9 +364,16 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                         result_content = f"Error: Tool '{function_name}' not found in registry."
                         print(f"DEBUG: execute_agent_task - Tool '{function_name}' not found in registry for job {job_id}") # ADDED DEBUG
                     await crud.add_agent_job_log(db, job_id, "output", result_content)
+                    
+                    serialized_result_content = result_content
+                    if isinstance(result_content, (dict, list)):
+                        serialized_result_content = json.dumps(result_content)
+                    elif not isinstance(result_content, str):
+                        serialized_result_content = str(result_content)
+
                     tool_results.append({
                         "tool_call_id": tool_call['id'], "role": "tool",
-                        "name": function_name, "content": result_content,
+                        "name": function_name, "content": serialized_result_content,
                     })
                 messages.extend(tool_results)
             
