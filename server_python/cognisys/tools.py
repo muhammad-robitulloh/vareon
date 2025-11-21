@@ -15,18 +15,19 @@ from server_python.arcana.schemas import AgentExecuteRequest
 # 1. Tool Definition
 # A tool is a dictionary with a schema for the LLM and a function to call.
 
-async def execute_shell_command(db: Session, user: User, terminal_service: TerminalService, command: str) -> str:
+async def execute_shell_command(db: Session, user: User, terminal_service: TerminalService, background_tasks: BackgroundTasks, command: str) -> str:
     """
     Executes a shell command in the user's sandboxed environment and returns the output.
     """
     print(f"Executing shell command: '{command}'")
-    stdout, stderr = await terminal_service.execute_command(command)
+    stdout, stderr, exit_code = await terminal_service.execute_command(command)
     
     output = ""
     if stdout:
         output += f"STDOUT:\n{stdout}\n"
     if stderr:
         output += f"STDERR:\n{stderr}\n"
+    output += f"EXIT CODE: {exit_code}\n"
     
     if not output:
         return "Command executed with no output."

@@ -112,6 +112,18 @@ class ShellCommandTranslationResponse(BaseModel):
     success: bool = Field(True, description="Indicates if the translation was successful.")
     error_message: Optional[str] = Field(None, description="Error message if translation failed.")
 
+# --- Execute Shell Command Schemas ---
+class ExecuteShellCommandRequest(BaseModel):
+    command: str = Field(..., description="The shell command to execute.")
+    current_directory: Optional[str] = Field(None, description="The directory in which to execute the command. If None, the default project directory will be used.")
+
+class ExecuteShellCommandResponse(BaseModel):
+    stdout: str = Field(..., description="The standard output of the command.")
+    stderr: str = Field(..., description="The standard error of the command.")
+    exit_code: int = Field(..., description="The exit code of the command.")
+    success: bool = Field(..., description="True if the command executed successfully (exit code 0), False otherwise.")
+    error_message: Optional[str] = Field(None, description="Error message if an exception occurred during execution.")
+
 # --- Reasoning System Schemas ---
 class ReasoningRequest(BaseModel):
     prompt: str = Field(..., description="The user's prompt or task for which reasoning is required.")
@@ -187,6 +199,23 @@ RUN_TESTS_TOOL_SCHEMA = {
                 "command": {"type": "string", "description": "The shell command to execute for running tests (e.g., 'pytest', 'npm test')."}
             },
             "required": ["local_path", "command"]
+        }
+    }
+}
+
+# --- Execute Shell Command Tool Schema ---
+EXECUTE_SHELL_COMMAND_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "execute_shell_command",
+        "description": "Executes a shell command directly within the user's project environment and returns its output.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "The shell command to execute (e.g., 'ls -l', 'git status')."},
+                "current_directory": {"type": "string", "description": "Optional: The directory in which to execute the command. If not provided, the default project directory will be used."}
+            },
+            "required": ["command"]
         }
     }
 }

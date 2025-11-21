@@ -139,6 +139,7 @@ AGENT_TOOLS_SCHEMA = [
     },
     schemas.GIT_GET_DIFF_TOOL_SCHEMA, # Add the new Git diff tool schema
     schemas.RUN_TESTS_TOOL_SCHEMA, # Add the new run tests tool schema
+    schemas.EXECUTE_SHELL_COMMAND_TOOL_SCHEMA, # Add the new execute shell command tool schema
     schemas.STORE_CONTEXT_ITEM_TOOL_SCHEMA, # Add the new store context item tool schema
     schemas.RETRIEVE_CONTEXT_ITEMS_TOOL_SCHEMA # Add the new retrieve context items tool schema
 ]
@@ -153,6 +154,7 @@ agent_tool_registry: Dict[str, Callable] = {
     "generate_reasoning": generate_reasoning,
     "git_get_diff": lambda git_service, local_path, path=None: git_service.get_diff(local_path=local_path, request=schemas.GitDiffRequest(path=path)),
     "run_tests": lambda terminal_service, local_path, command: terminal_service.execute_command(f"cd {local_path} && {command}"),
+    "execute_shell_command": lambda terminal_service, command, current_directory=None: terminal_service.execute_command(command, current_directory=current_directory),
     "store_context_item": lambda db, user, item_type, key, value: context_crud.create_context_item(db=db, user_id=str(user.id), key=f"{context_crud.CONTEXT_KEY_PREFIXES.get(item_type)}{key}", value=value),
     "retrieve_context_items": lambda db, user, item_type=None, key=None: context_crud.get_all_context_for_user(db=db, user_id=str(user.id)) if not item_type and not key else [item for category in context_crud.get_all_context_for_user(db=db, user_id=str(user.id)).values() for item in category if (not item_type or item.get('type') == item_type) and (not key or item.get('key') == key)],
 }
@@ -316,7 +318,21 @@ async def execute_agent_task(db: Session, user: User, request: schemas.AgentExec
                             elif function_name.startswith("git_"):
                                 result_content = await tool_func(git_service=git_service, local_path=target_repo_path, **function_args)
                             elif function_name == "execute_shell_command":
-                                result_content = await tool_func(terminal_service=terminal_service, **function_args)
+                                command = function_args.get("command")
+                                current_directory = function_args.get("current_directory")
+                                stdout, stderr, exit_code = await tool_func(
+                                    terminal_service=terminal_service, 
+                                    command=command, 
+                                    current_directory=current_directory
+                                )
+                                shell_command_response = schemas.ExecuteShellCommandResponse(
+                                    stdout=stdout,
+                                    stderr=stderr,
+                                    exit_code=exit_code,
+                                    success=exit_code == 0,
+                                    error_message=stderr if exit_code != 0 else None
+                                )
+                                result_content = shell_command_response.dict()
                             elif function_name == "run_tests":
                                 result_content = await tool_func(terminal_service=terminal_service, local_path=target_repo_path, **function_args)
                             elif function_name == "store_context_item":

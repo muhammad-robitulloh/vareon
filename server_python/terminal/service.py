@@ -32,17 +32,18 @@ class TerminalService:
         if self.master_fd:
             os.write(self.master_fd, data.encode())
 
-    async def execute_command(self, command: str) -> (str, str):
+    async def execute_command(self, command: str, current_directory: Optional[str] = None) -> (str, str, int):
         """
-        Executes a single non-interactive command and returns its stdout and stderr.
+        Executes a single non-interactive command and returns its stdout, stderr, and exit code.
         """
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            cwd=current_directory # Set the current working directory
         )
         stdout, stderr = await process.communicate()
-        return stdout.decode(), stderr.decode()
+        return stdout.decode(), stderr.decode(), process.returncode
 
     def resize(self, cols: int, rows: int):
         if self.master_fd:
