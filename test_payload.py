@@ -3,7 +3,7 @@ import asyncio
 import json
 
 # API key yang Anda berikan
-API_KEY = "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"
+API_KEY = "#"
 
 # Endpoint API OpenRouter
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
